@@ -607,7 +607,7 @@ class TerminalManager:
         try:
             tty_devices = Path("/dev").glob("ttys*")
             most_recent = None
-            most_recent_time = 0
+            most_recent_time = 0.0
 
             for tty_path in tty_devices:
                 try:
@@ -778,6 +778,7 @@ async def terminal_workflow_guide() -> str:
     - Session IDs are in format "window_id_tab_id" (e.g., "75294_1")
     - The comprehensive tool avoids sequential tool call timing issues
     """
+    return "Complete guide for working with terminal sessions via MCP tools"
 
 
 @server.prompt("terminal_session_summary")
