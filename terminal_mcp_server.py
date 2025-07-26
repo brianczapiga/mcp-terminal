@@ -783,13 +783,14 @@ async def terminal_session_summary(
 ) -> str:
     """Generate a summary of the current terminal session.
 
-    This prompt helps you understand how to work with terminal sessions.
+    This prompt provides a template for analyzing terminal session content.
+    The AI should use this template to generate a meaningful summary.
 
-    To get a summary of a terminal session:
+    To use this prompt:
     1. First call list_sessions() to see available sessions
     2. Use set_active_session(session_id) to select the session
     3. Call get_screen() to get the current content
-    4. Then use this prompt to generate a summary
+    4. Then use this prompt template to generate a summary
     """
     try:
         if session_id not in terminal_manager.sessions:
@@ -798,52 +799,80 @@ async def terminal_session_summary(
         session = terminal_manager.sessions[session_id]
         content = terminal_manager.get_session_content(session_id, lines=50)
 
-        summary = f"Session: {session.name}\n"
-        summary += f"Window ID: {session.window_id}, Tab ID: {session.tab_id}\n"
-        summary += f"TTY Device: {session.tty_device or 'Unknown'}\n"
-        summary += f"Active: {session.is_active}\n\n"
-        summary += f"Recent Content:\n{content}"
+        template = f"""Analyze the following terminal session and provide a summary:
+
+Session Information:
+- Name: {session.name}
+- Window ID: {session.window_id}, Tab ID: {session.tab_id}
+- TTY Device: {session.tty_device or 'Unknown'}
+- Active: {session.is_active}
+
+Recent Content:
+{content}"""
 
         if include_history:
             history = terminal_manager.scroll_back(session_id, pages=2)
-            summary += f"\n\nCommand History:\n{history}"
+            template += f"\n\nCommand History:\n{history}"
 
-        return summary
+        template += """
+
+Please provide a concise summary of what's happening in this terminal session, including:
+- Current working directory and context
+- Recent commands executed
+- Any errors or issues
+- Overall session state"""
+
+        return template
     except Exception as e:
-        logger.error(f"Error generating session summary: {e}")
-        return f"Error generating summary: {str(e)}"
+        logger.error(f"Error generating session summary template: {e}")
+        return f"Error generating summary template: {str(e)}"
 
 
 @server.prompt("terminal_command_suggestion")
 async def terminal_command_suggestion(session_id: str, context: str = "") -> str:
-    """Suggest the next command based on current terminal state."""
+    """Suggest the next command based on current terminal state.
+
+    This prompt provides a template for suggesting the next command to run.
+    The AI should analyze the terminal state and suggest appropriate commands.
+    """
     try:
         if session_id not in terminal_manager.sessions:
             return f"Session {session_id} not found"
 
         content = terminal_manager.get_session_content(session_id, lines=20)
 
-        suggestion = "Based on the current terminal state:\n\n"
-        suggestion += f"Recent output:\n{content}\n\n"
+        template = f"""Based on the current terminal state, suggest the next command to run:
+
+Recent Terminal Output:
+{content}"""
 
         if context:
-            suggestion += f"Context: {context}\n\n"
+            template += f"\n\nContext: {context}"
 
-        suggestion += "Suggested next commands:\n"
-        suggestion += "1. Check current directory: `pwd`\n"
-        suggestion += "2. List files: `ls -la`\n"
-        suggestion += "3. Check process status: `ps aux`\n"
-        suggestion += "4. Check disk usage: `df -h`\n"
+        template += """
 
-        return suggestion
+Please analyze the terminal output and suggest the most appropriate next command.
+Consider:
+- Current working directory
+- Recent command history
+- Any errors or issues that need addressing
+- What the user might be trying to accomplish
+
+Provide your suggestion with a brief explanation of why it's appropriate."""
+
+        return template
     except Exception as e:
-        logger.error(f"Error generating command suggestion: {e}")
-        return f"Error generating suggestion: {str(e)}"
+        logger.error(f"Error generating command suggestion template: {e}")
+        return f"Error generating suggestion template: {str(e)}"
 
 
 @server.prompt("terminal_troubleshooting")
 async def terminal_troubleshooting(session_id: str) -> str:
-    """Analyze terminal session for potential issues."""
+    """Analyze terminal session for potential issues.
+
+    This prompt provides a template for troubleshooting terminal issues.
+    The AI should analyze the session content and identify problems.
+    """
     try:
         if session_id not in terminal_manager.sessions:
             return f"Session {session_id} not found"
@@ -851,30 +880,32 @@ async def terminal_troubleshooting(session_id: str) -> str:
         session = terminal_manager.sessions[session_id]
         content = terminal_manager.get_session_content(session_id, lines=30)
 
-        analysis = "Terminal Session Analysis:\n\n"
-        analysis += f"Session: {session.name}\n"
-        analysis += f"TTY Device: {session.tty_device or 'Unknown'}\n"
-        analysis += f"Active: {session.is_active}\n\n"
+        template = f"""Analyze this terminal session for potential issues:
 
-        # Basic troubleshooting checks
-        if "error" in content.lower():
-            analysis += "⚠️  Errors detected in recent output\n"
-        if "permission denied" in content.lower():
-            analysis += "⚠️  Permission issues detected\n"
-        if "command not found" in content.lower():
-            analysis += "⚠️  Missing commands detected\n"
+Session Information:
+- Name: {session.name}
+- TTY Device: {session.tty_device or 'Unknown'}
+- Active: {session.is_active}
 
-        analysis += f"\nRecent output:\n{content}\n\n"
-        analysis += "Troubleshooting suggestions:\n"
-        analysis += "1. Check if the session is responsive\n"
-        analysis += "2. Verify file permissions\n"
-        analysis += "3. Check if required commands are installed\n"
-        analysis += "4. Restart the terminal session if needed\n"
+Recent Terminal Output:
+{content}
 
-        return analysis
+Please analyze the terminal output and identify any potential issues, including:
+- Error messages or warnings
+- Permission problems
+- Missing commands or dependencies
+- Configuration issues
+- Performance problems
+
+For each issue found, provide:
+1. A description of the problem
+2. The likely cause
+3. Suggested solutions or next steps"""
+
+        return template
     except Exception as e:
-        logger.error(f"Error generating troubleshooting analysis: {e}")
-        return f"Error generating analysis: {str(e)}"
+        logger.error(f"Error generating troubleshooting template: {e}")
+        return f"Error generating troubleshooting template: {str(e)}"
 
 
 @server.tool()
