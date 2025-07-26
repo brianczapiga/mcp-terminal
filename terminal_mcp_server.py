@@ -64,9 +64,7 @@ class TerminalManager:
     def __init__(self):
         self.sessions: Dict[str, SessionInfo] = {}
         self.active_session_id: Optional[str] = None
-        self.output_buffers: Dict[str, deque] = defaultdict(
-            lambda: deque(maxlen=500)
-        )
+        self.output_buffers: Dict[str, deque] = defaultdict(lambda: deque(maxlen=500))
         self.last_scan_time = 0
         self.scan_interval = 2.0  # seconds
         self.terminal_app = self._detect_terminal_app()
@@ -137,9 +135,7 @@ class TerminalManager:
         current_time = time.time()
         if current_time - self.last_scan_time < self.scan_interval:
             time_diff = current_time - self.last_scan_time
-            logger.info(
-                f"Using cached sessions (scanned {time_diff:.1f}s ago)"
-            )
+            logger.info(f"Using cached sessions (scanned {time_diff:.1f}s ago)")
             return list(self.sessions.values())
 
         logger.info(f"Scanning {self.terminal_app} sessions...")
@@ -218,11 +214,7 @@ class TerminalManager:
                 i = 0
                 while i < len(lines):
                     line = lines[i].strip()
-                    if (
-                        line
-                        and not line.startswith('"')
-                        and not line.startswith("{")
-                    ):
+                    if line and not line.startswith('"') and not line.startswith("{"):
                         # This should be a session entry
                         parts = line.split(", ")
                         if len(parts) >= 5:
@@ -237,9 +229,7 @@ class TerminalManager:
                                 window_id=window_id,
                                 tab_id=tab_id,
                                 name=name,
-                                tty_device=(
-                                    tty if tty != "missing value" else None
-                                ),
+                                tty_device=(tty if tty != "missing value" else None),
                                 last_activity=time.time(),
                                 is_active=busy,
                             )
@@ -445,9 +435,7 @@ class TerminalManager:
         lines_list = content.split("\n")
         return "\n".join(lines_list[-lines:]) if lines_list else ""
 
-    def send_input(
-        self, session_id: str, text: str, execute: bool = True
-    ) -> bool:
+    def send_input(self, session_id: str, text: str, execute: bool = True) -> bool:
         """Send input to a specific session."""
         if session_id not in self.sessions:
             logger.error(f"Session {session_id} not found")
@@ -694,9 +682,7 @@ class SetActiveSessionRequest(BaseModel):
 
 class GetScreenRequest(BaseModel):
     lines: int = Field(default=100, description="Number of lines to retrieve")
-    mode: str = Field(
-        default="focus", description="Mode: focus, recent-output, manual"
-    )
+    mode: str = Field(default="focus", description="Mode: focus, recent-output, manual")
 
 
 class SendInputRequest(BaseModel):
@@ -868,9 +854,7 @@ including:
 
 
 @server.prompt("terminal_command_suggestion")
-async def terminal_command_suggestion(
-    session_id: str, context: str = ""
-) -> str:
+async def terminal_command_suggestion(session_id: str, context: str = "") -> str:
     """Suggest the next command based on current terminal state.
 
     This prompt provides a template for suggesting the next command to run.
@@ -1030,9 +1014,7 @@ async def set_active_session(
                 # Empty string or any string - use defaults
                 session_id = ""
 
-        logger.info(
-            f"set_active_session called with session_id='{session_id}'"
-        )
+        logger.info(f"set_active_session called with session_id='{session_id}'")
 
         if not session_id:
             return {"success": False, "message": "No session_id provided"}
@@ -1122,9 +1104,7 @@ async def get_screen(
                 sessions = terminal_manager.scan_sessions()
                 if sessions:
                     most_recent = max(sessions, key=lambda s: s.last_activity)
-                    session_id = (
-                        f"{most_recent.window_id}_{most_recent.tab_id}"
-                    )
+                    session_id = f"{most_recent.window_id}_{most_recent.tab_id}"
                     terminal_manager.set_active_session(session_id)
 
             if terminal_manager.active_session_id:
@@ -1243,9 +1223,7 @@ async def send_keypress(
                 "message": "No session specified and no active session available",
             }
 
-        success = terminal_manager.send_keypress(
-            target_session_id, key, modifiers
-        )
+        success = terminal_manager.send_keypress(target_session_id, key, modifiers)
         return {
             "success": success,
             "message": (
@@ -1277,9 +1255,7 @@ async def paste_text(
                 text = request
                 session_id = session_id  # Keep the default
 
-        logger.info(
-            f"paste_text called with text='{text}', session_id='{session_id}'"
-        )
+        logger.info(f"paste_text called with text='{text}', session_id='{session_id}'")
 
         if is_readonly_mode():
             return {
@@ -1330,16 +1306,12 @@ async def scroll_back(
                 pages = pages  # Keep the default
                 session_id = session_id  # Keep the default
 
-        logger.info(
-            f"scroll_back called with pages={pages}, session_id='{session_id}'"
-        )
+        logger.info(f"scroll_back called with pages={pages}, session_id='{session_id}'")
 
         # Use active session if none specified
         target_session_id = session_id or terminal_manager.active_session_id
         if not target_session_id:
-            return {
-                "content": "No session specified and no active session available"
-            }
+            return {"content": "No session specified and no active session available"}
 
         content = terminal_manager.scroll_back(target_session_id, pages)
         return {"content": content}
@@ -1421,9 +1393,7 @@ async def get_all_terminal_info(
         elif session_ids:
             # If no active session, use the most recently active one
             most_recent = max(sessions, key=lambda s: s.last_activity)
-            default_session_id = (
-                f"{most_recent.window_id}_{most_recent.tab_id}"
-            )
+            default_session_id = f"{most_recent.window_id}_{most_recent.tab_id}"
 
         # Create comprehensive response
         response = {
@@ -1438,9 +1408,7 @@ async def get_all_terminal_info(
             ),
         }
 
-        logger.info(
-            f"Returning comprehensive info for {len(sessions)} sessions"
-        )
+        logger.info(f"Returning comprehensive info for {len(sessions)} sessions")
         return response
 
     except Exception as e:
@@ -1462,8 +1430,6 @@ if __name__ == "__main__":
     import sys
 
     print("Starting Terminal MCP Server (stdio transport)...", file=sys.stderr)
-    print(
-        "This server is ready to communicate via stdin/stdout", file=sys.stderr
-    )
+    print("This server is ready to communicate via stdin/stdout", file=sys.stderr)
     logger.info("Starting server with stdio transport")
     server.run(transport="stdio")

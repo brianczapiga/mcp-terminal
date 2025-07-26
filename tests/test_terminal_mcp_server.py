@@ -73,9 +73,7 @@ class TestTerminalManager:
 
         with patch.object(self.manager, "_run_applescript") as mock_run:
             mock_run.return_value = "test content"
-            content = self.manager.get_session_content(
-                "test_session", lines=10
-            )
+            content = self.manager.get_session_content("test_session", lines=10)
             assert content == "test content"
 
     def test_send_input(self):
@@ -93,9 +91,7 @@ class TestTerminalManager:
 
         with patch.object(self.manager, "_run_applescript") as mock_run:
             mock_run.return_value = "success"
-            result = self.manager.send_input(
-                "test_session", "ls -la", execute=True
-            )
+            result = self.manager.send_input("test_session", "ls -la", execute=True)
             assert result is True
 
     def test_set_active_session(self):

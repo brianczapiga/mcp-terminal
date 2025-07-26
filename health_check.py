@@ -79,12 +79,9 @@ def check_terminal_apps():
 def check_permissions():
     """Check if Accessibility permissions are granted."""
     print("⚠️  Checking Accessibility permissions...")
+    print("   Please ensure Terminal.app or iTerm2 has Accessibility permissions")
     print(
-        "   Please ensure Terminal.app or iTerm2 has Accessibility permissions"
-    )
-    print(
-        "   Go to System Preferences → Security & Privacy → Privacy → "
-        "Accessibility"
+        "   Go to System Preferences → Security & Privacy → Privacy → " "Accessibility"
     )
     return True
 
