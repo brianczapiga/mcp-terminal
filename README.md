@@ -17,7 +17,7 @@ A Python MCP (Model Context Protocol) server that allows AI tools (like Goose or
 ### Prerequisites
 
 - macOS (required for AppleScript integration)
-- Python 3.8 or higher
+- Python 3.10 or higher
 - Terminal.app or iTerm2 installed
 
 ### Setup
