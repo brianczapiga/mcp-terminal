@@ -1,1 +1,1 @@
-# Tests package for Terminal MCP Server 
+# Tests package for Terminal MCP Server
