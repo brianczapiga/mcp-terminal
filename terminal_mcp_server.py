@@ -385,10 +385,16 @@ class TerminalManager:
             if window_index_result and window_index_result.isdigit():
                 window_index = int(window_index_result)
                 # Use direct AppleScript to get content from specific window
-                script = f'tell application "Terminal" to get contents of item 1 of tabs of item {window_index} of windows'
+                script = (
+                    f'tell application "Terminal" to get contents of '
+                    f"item 1 of tabs of item {window_index} of windows"
+                )
             else:
                 # Fallback to first window
-                script = 'tell application "Terminal" to get contents of item 1 of tabs of item 1 of windows'
+                script = (
+                    'tell application "Terminal" to get contents of '
+                    "item 1 of tabs of item 1 of windows"
+                )
         else:  # iTerm2
             script = f"""
             tell application "iTerm2"
@@ -683,7 +689,10 @@ class SendInputRequest(BaseModel):
 class SendKeypressRequest(BaseModel):
     key: str = Field(
         ...,
-        description="Key to press (e.g., 'return', 'tab', 'escape', 'up', 'down', 'left', 'right')",
+        description=(
+            "Key to press (e.g., 'return', 'tab', 'escape', "
+            "'up', 'down', 'left', 'right')"
+        ),
     )
     modifiers: Optional[List[str]] = Field(
         default=None, description="Modifier keys (e.g., ['command', 'shift'])"
@@ -736,7 +745,8 @@ async def get_terminal_session(session_id: str) -> str:
 async def terminal_workflow_guide() -> str:
     """Complete guide for working with terminal sessions via MCP tools.
 
-    This guide explains how to use the terminal MCP tools together to examine and interact with terminal sessions.
+    This guide explains how to use the terminal MCP tools together to examine
+    and interact with terminal sessions.
 
     RECOMMENDED WORKFLOW (Single Call):
 
@@ -816,7 +826,8 @@ Recent Content:
 
         template += """
 
-Please provide a concise summary of what's happening in this terminal session, including:
+Please provide a concise summary of what's happening in this terminal session,
+including:
 - Current working directory and context
 - Recent commands executed
 - Any errors or issues
@@ -841,7 +852,8 @@ async def terminal_command_suggestion(session_id: str, context: str = "") -> str
 
         content = terminal_manager.get_session_content(session_id, lines=20)
 
-        template = f"""Based on the current terminal state, suggest the next command to run:
+        template = f"""Based on the current terminal state, suggest the next
+command to run:
 
 Recent Terminal Output:
 {content}"""
@@ -851,7 +863,8 @@ Recent Terminal Output:
 
         template += """
 
-Please analyze the terminal output and suggest the most appropriate next command.
+Please analyze the terminal output and suggest the most appropriate next
+command.
 Consider:
 - Current working directory
 - Recent command history
@@ -912,8 +925,9 @@ For each issue found, provide:
 async def list_sessions() -> ListSessionsResponse:
     """List all Terminal sessions (windows/tabs) with their IDs.
 
-    This tool returns a simple list of session IDs. For comprehensive information about all sessions
-    including their content, use get_all_terminal_info() instead.
+    This tool returns a simple list of session IDs. For comprehensive
+    information about all sessions including their content, use
+    get_all_terminal_info() instead.
 
     Workflow:
     1. Call list_sessions() to get available session IDs
@@ -921,7 +935,8 @@ async def list_sessions() -> ListSessionsResponse:
     3. Use get_screen() to retrieve content from the active session
     4. Repeat steps 2-3 for each session you want to examine
 
-    RECOMMENDED: Use get_all_terminal_info() instead for a single call that returns everything.
+    RECOMMENDED: Use get_all_terminal_info() instead for a single call that
+    returns everything.
 
     Example workflow:
     - list_sessions() → returns ["75294_1", "76536_1"]
@@ -965,8 +980,9 @@ async def set_active_session(
 ) -> Dict[str, Union[bool, str]]:
     """Set the active session for terminal operations.
 
-    This tool switches the focus to a specific terminal session. You must call this before
-    using get_screen() to retrieve content from a specific session.
+    This tool switches the focus to a specific terminal session. You must
+    call this before using get_screen() to retrieve content from a specific
+    session.
 
     Usage:
     1. First call list_sessions() to get available session IDs
@@ -996,16 +1012,20 @@ async def get_screen(
 ) -> Dict[str, Union[str, List[Dict[str, str]]]]:
     """Get the current screen contents of terminal sessions.
 
-    This tool retrieves the visible content from terminal sessions. The behavior depends on the mode:
+    This tool retrieves the visible content from terminal sessions. The
+    behavior depends on the mode:
 
-    - 'focus' (default): Gets content from the currently active session (set via set_active_session)
-    - 'recent-output': Automatically finds the most recently active session and gets its content
+    - 'focus' (default): Gets content from the currently active session
+      (set via set_active_session)
+    - 'recent-output': Automatically finds the most recently active
+      session and gets its content
     - 'manual': Uses the active session (same as focus mode)
 
-    IMPORTANT: For 'focus' and 'manual' modes, you must first call set_active_session() to select
-    which session to get content from.
+    IMPORTANT: For 'focus' and 'manual' modes, you must first call
+    set_active_session() to select which session to get content from.
 
-    RECOMMENDED: For examining all sessions at once, use get_all_terminal_info() instead.
+    RECOMMENDED: For examining all sessions at once, use
+    get_all_terminal_info() instead.
 
     Workflow for examining individual sessions:
     1. list_sessions() - get all available session IDs
@@ -1070,7 +1090,10 @@ async def send_input(request: SendInputRequest) -> Dict[str, Union[bool, str]]:
             )
             return {
                 "success": False,
-                "message": "Input injection is disabled. Set MCP_TERMINAL_READONLY=0 to enable.",
+                "message": (
+                    "Input injection is disabled. Set MCP_TERMINAL_READONLY=0 "
+                    "to enable."
+                ),
             }
 
         session_id = request.session_id or terminal_manager.active_session_id
@@ -1080,9 +1103,11 @@ async def send_input(request: SendInputRequest) -> Dict[str, Union[bool, str]]:
         success = terminal_manager.send_input(session_id, request.text, request.execute)
         return {
             "success": success,
-            "message": f"Input sent to session {session_id}"
-            if success
-            else f"Failed to send input to session {session_id}",
+            "message": (
+                f"Input sent to session {session_id}"
+                if success
+                else f"Failed to send input to session {session_id}"
+            ),
         }
     except Exception as e:
         logger.error(f"Error sending input: {e}")
@@ -1100,7 +1125,10 @@ async def send_keypress(request: SendKeypressRequest) -> Dict[str, Union[bool, s
             )
             return {
                 "success": False,
-                "message": "Input injection is disabled. Set MCP_TERMINAL_READONLY=0 to enable.",
+                "message": (
+                    "Input injection is disabled. Set MCP_TERMINAL_READONLY=0 "
+                    "to enable."
+                ),
             }
 
         session_id = request.session_id or terminal_manager.active_session_id
@@ -1112,9 +1140,11 @@ async def send_keypress(request: SendKeypressRequest) -> Dict[str, Union[bool, s
         )
         return {
             "success": success,
-            "message": f"Keypress sent to session {session_id}"
-            if success
-            else f"Failed to send keypress to session {session_id}",
+            "message": (
+                f"Keypress sent to session {session_id}"
+                if success
+                else f"Failed to send keypress to session {session_id}"
+            ),
         }
     except Exception as e:
         logger.error(f"Error sending keypress: {e}")
@@ -1130,7 +1160,10 @@ async def paste_text(request: PasteTextRequest) -> Dict[str, Union[bool, str]]:
             logger.warning("Text paste blocked: Server is running in readonly mode")
             return {
                 "success": False,
-                "message": "Input injection is disabled. Set MCP_TERMINAL_READONLY=0 to enable.",
+                "message": (
+                    "Input injection is disabled. Set MCP_TERMINAL_READONLY=0 "
+                    "to enable."
+                ),
             }
 
         session_id = request.session_id or terminal_manager.active_session_id
@@ -1140,9 +1173,11 @@ async def paste_text(request: PasteTextRequest) -> Dict[str, Union[bool, str]]:
         success = terminal_manager.paste_text(session_id, request.text)
         return {
             "success": success,
-            "message": f"Text pasted to session {session_id}"
-            if success
-            else f"Failed to paste text to session {session_id}",
+            "message": (
+                f"Text pasted to session {session_id}"
+                if success
+                else f"Failed to paste text to session {session_id}"
+            ),
         }
     except Exception as e:
         logger.error(f"Error pasting text: {e}")
@@ -1168,14 +1203,15 @@ async def scroll_back(request: ScrollBackRequest) -> Dict[str, str]:
 async def get_all_terminal_info(request: GetScreenRequest) -> Dict[str, Any]:
     """Get comprehensive information about all terminal sessions in one call.
 
-    This tool returns everything you need to know about terminal sessions in a single response:
+    This tool returns everything you need to know about terminal sessions in
+    a single response:
     - List of all session IDs
     - Content from each session
     - Default/current active session ID
     - Summary information
 
-    This is the recommended tool to use when you want to examine all terminal sessions
-    without making multiple sequential tool calls.
+    This is the recommended tool to use when you want to examine all terminal
+    sessions without making multiple sequential tool calls.
 
     Usage:
     - Call get_all_terminal_info() to get everything about all sessions
@@ -1230,7 +1266,10 @@ async def get_all_terminal_info(request: GetScreenRequest) -> Dict[str, Any]:
             "session_info": session_info,
             "default_session_id": default_session_id,
             "total_sessions": len(sessions),
-            "summary": f"Found {len(sessions)} terminal sessions. Default session: {default_session_id}",
+            "summary": (
+                f"Found {len(sessions)} terminal sessions. "
+                f"Default session: {default_session_id}"
+            ),
         }
 
         logger.info(f"Returning comprehensive info for {len(sessions)} sessions")
