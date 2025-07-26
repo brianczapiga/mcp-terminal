@@ -62,13 +62,13 @@ clean:
 # Run linting checks
 lint:
 	@echo "Running linting checks..."
-	flake8 terminal_mcp_server.py
-	pylint terminal_mcp_server.py
+	flake8 --max-line-length=88 terminal_mcp_server.py health_check.py tests/
+	pylint terminal_mcp_server.py health_check.py tests/
 
 # Format code with black
 format:
 	@echo "Formatting code..."
-	black terminal_mcp_server.py
+	black .
 
 # Run all checks
 check: lint format test

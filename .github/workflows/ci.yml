@@ -40,21 +40,21 @@ jobs:
     - name: Lint with flake8
       run: |
         # stop the build if there are Python syntax errors or undefined names
-        flake8 terminal_mcp_server.py --count --select=E9,F63,F7,F82 --show-source --statistics
+        flake8 terminal_mcp_server.py health_check.py tests/ --count --select=E9,F63,F7,F82 --show-source --statistics
         # exit-zero treats all errors as warnings
-        flake8 terminal_mcp_server.py --count --exit-zero --max-complexity=10 --max-line-length=88 --statistics
+        flake8 terminal_mcp_server.py health_check.py tests/ --count --exit-zero --max-complexity=10 --max-line-length=88 --statistics
     
     - name: Check formatting with black
       run: |
-        black --check --diff terminal_mcp_server.py
+        black --check --diff .
     
     - name: Lint with pylint
       run: |
-        pylint terminal_mcp_server.py --disable=C0114,C0115,C0116,R0903,R0913,R0914,R0915,W0621
+        pylint terminal_mcp_server.py health_check.py tests/ --config-file pyproject.toml
     
     - name: Type check with mypy
       run: |
-        mypy terminal_mcp_server.py --ignore-missing-imports
+        mypy terminal_mcp_server.py health_check.py tests/ --config-file pyproject.toml
     
     - name: Test with pytest
       run: |
