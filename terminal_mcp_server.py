@@ -1143,8 +1143,7 @@ async def send_input(
             elif isinstance(request, str):
                 # If request is a string, treat it as the text to send
                 text = request
-                execute = execute  # Keep the default
-                session_id = session_id  # Keep the default
+                # Keep the default values for execute and session_id
 
         logger.info(
             f"send_input called with text='{text}', execute={execute}, session_id='{session_id}'"
@@ -1199,8 +1198,7 @@ async def send_keypress(
             elif isinstance(request, str):
                 # If request is a string, treat it as the key to press
                 key = request
-                modifiers = modifiers  # Keep the default
-                session_id = session_id  # Keep the default
+                # Keep the default values for modifiers and session_id
 
         logger.info(
             f"send_keypress called with key='{key}', modifiers={modifiers}, session_id='{session_id}'"
@@ -1253,7 +1251,7 @@ async def paste_text(
             elif isinstance(request, str):
                 # If request is a string, treat it as the text to paste
                 text = request
-                session_id = session_id  # Keep the default
+                # Keep the default value for session_id
 
         logger.info(f"paste_text called with text='{text}', session_id='{session_id}'")
 
@@ -1303,8 +1301,7 @@ async def scroll_back(
                 session_id = request.get("session_id", session_id)
             elif isinstance(request, str):
                 # If request is a string, use defaults
-                pages = pages  # Keep the default
-                session_id = session_id  # Keep the default
+                pass  # Keep the default values for pages and session_id
 
         logger.info(f"scroll_back called with pages={pages}, session_id='{session_id}'")
 
