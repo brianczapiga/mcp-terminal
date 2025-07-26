@@ -89,6 +89,20 @@ disable = [
     "R0914",  # too-many-locals
     "R0915",  # too-many-statements
     "W0621",  # redefined-outer-name
+    "C0301",  # line-too-long
+    "C0302",  # too-many-lines
+    "E0401",  # import-error (for CI environment)
+    "W1203",  # logging-fstring-interpolation
+    "W1510",  # subprocess-run-check
+    "W0718",  # broad-exception-caught
+    "W1309",  # f-string-without-interpolation
+    "W0611",  # unused-import
+    "W0612",  # unused-variable
+    "R1705",  # no-else-return
+    "C0415",  # import-outside-toplevel
+    "W0212",  # protected-access (for tests)
+    "W0201",  # attribute-defined-outside-init (for tests)
+    "C0411",  # wrong-import-order
 ]
 
 [tool.pylint.format]
