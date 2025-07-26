@@ -5,9 +5,7 @@ This script verifies that the server can be imported and basic functionality wor
 """
 
 import sys
-import os
 import subprocess
-import time
 
 
 def check_python_version():
@@ -23,9 +21,9 @@ def check_python_version():
 def check_dependencies():
     """Check if required dependencies are installed."""
     try:
-        import fastmcp
-        import pydantic
-        import typing_extensions
+        import fastmcp  # noqa: F401
+        import pydantic  # noqa: F401
+        import typing_extensions  # noqa: F401
 
         print("✅ All required dependencies are installed")
         return True
@@ -88,7 +86,7 @@ def check_permissions():
 def check_server_import():
     """Check if the server can be imported."""
     try:
-        from terminal_mcp_server import TerminalManager, SessionInfo
+        from terminal_mcp_server import TerminalManager, SessionInfo  # noqa: F401
 
         print("✅ Server module can be imported")
         return True
@@ -102,7 +100,7 @@ def check_server_initialization():
     try:
         from terminal_mcp_server import TerminalManager
 
-        manager = TerminalManager()
+        TerminalManager()  # Just test initialization
         print("✅ Server can be initialized")
         return True
     except Exception as e:

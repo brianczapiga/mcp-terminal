@@ -3,8 +3,7 @@ Tests for the Terminal MCP Server.
 """
 
 import pytest
-import asyncio
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import Mock, patch
 from terminal_mcp_server import TerminalManager, SessionInfo
 
 

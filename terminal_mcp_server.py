@@ -4,17 +4,14 @@ MCP Server for macOS Terminal Integration
 Allows AI tools to collaborate with Terminal sessions via AppleScript.
 """
 
-import asyncio
-import json
 import logging
 import os
 import subprocess
 import time
 from collections import defaultdict, deque
 from dataclasses import dataclass
-from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Union, Any
+from typing import Dict, List, Optional, Union, Any
 
 from fastmcp import FastMCP
 from pydantic import BaseModel, Field
@@ -128,9 +125,8 @@ class TerminalManager:
         """Scan for all Terminal sessions and update internal state."""
         current_time = time.time()
         if current_time - self.last_scan_time < self.scan_interval:
-            logger.info(
-                f"Using cached sessions (scanned {current_time - self.last_scan_time:.1f}s ago)"
-            )
+            time_diff = current_time - self.last_scan_time
+            logger.info(f"Using cached sessions (scanned {time_diff:.1f}s ago)")
             return list(self.sessions.values())
 
         logger.info(f"Scanning {self.terminal_app} sessions...")
@@ -165,7 +161,7 @@ class TerminalManager:
                     end if
                     set tabTty to tty of t
                     set tabBusy to busy of t
-                    
+
                     set sessionInfo to {windowId, tabId, tabName, tabTty, tabBusy}
                     copy sessionInfo to end of sessionList
                 end repeat
@@ -180,8 +176,8 @@ class TerminalManager:
         try:
             # Parse the AppleScript result
             # The result might be a single line with all session data
-            if "," in result and not "\n" in result:
-                # Single line format: "75081, 1, Terminal, /dev/ttys000, false, 74477, 1, Terminal, /dev/ttys001, false"
+            if "," in result and "\n" not in result:
+                # Single line format: "75081, 1, Terminal, /dev/ttys000, false, ..."
                 parts = result.split(", ")
                 i = 0
                 while i < len(parts) - 4:  # Need at least 5 parts per session
@@ -317,7 +313,7 @@ class TerminalManager:
                 repeat with t in tabs of w
                     set tabId to id of t as string
                     set tabName to name of t
-                    
+
                     set sessionInfo to {windowId, tabId, tabName}
                     copy sessionInfo to end of sessionList
                 end repeat
@@ -499,7 +495,7 @@ class TerminalManager:
             logger.error(f"Session {session_id} not found")
             return False
 
-        session = self.sessions[session_id]
+        # session = self.sessions[session_id]  # Not used in this function
 
         # Map special keys to AppleScript key codes
         key_mapping = {
@@ -571,7 +567,7 @@ class TerminalManager:
             logger.error(f"Session {session_id} not found")
             return False
 
-        session = self.sessions[session_id]
+        # session = self.sessions[session_id]  # Not used in this function
 
         # First, set the text to clipboard
         clipboard_script = f"""
@@ -581,7 +577,7 @@ class TerminalManager:
 
         # Then paste it using Cmd+V
         if self.terminal_app == "Terminal":
-            script = f"""
+            script = """
             tell application "System Events"
                 tell process "Terminal"
                     set frontmost to true
@@ -590,7 +586,7 @@ class TerminalManager:
             end tell
             """
         else:  # iTerm2
-            script = f"""
+            script = """
             tell application "System Events"
                 tell process "iTerm2"
                     set frontmost to true
@@ -716,7 +712,7 @@ terminal_manager = TerminalManager()
 
 
 # MCP Server
-server = FastMCP("terminal-mcp-server")
+server: FastMCP = FastMCP("terminal-mcp-server")
 logger.info("FastMCP server created")
 
 
@@ -827,7 +823,7 @@ async def terminal_command_suggestion(session_id: str, context: str = "") -> str
 
         content = terminal_manager.get_session_content(session_id, lines=20)
 
-        suggestion = f"Based on the current terminal state:\n\n"
+        suggestion = "Based on the current terminal state:\n\n"
         suggestion += f"Recent output:\n{content}\n\n"
 
         if context:
@@ -855,7 +851,7 @@ async def terminal_troubleshooting(session_id: str) -> str:
         session = terminal_manager.sessions[session_id]
         content = terminal_manager.get_session_content(session_id, lines=30)
 
-        analysis = f"Terminal Session Analysis:\n\n"
+        analysis = "Terminal Session Analysis:\n\n"
         analysis += f"Session: {session.name}\n"
         analysis += f"TTY Device: {session.tty_device or 'Unknown'}\n"
         analysis += f"Active: {session.is_active}\n\n"
@@ -952,9 +948,11 @@ async def set_active_session(
         success = terminal_manager.set_active_session(request.session_id)
         return {
             "success": success,
-            "message": f"Active session set to {request.session_id}"
-            if success
-            else f"Session {request.session_id} not found",
+            "message": (
+                f"Active session set to {request.session_id}"
+                if success
+                else f"Session {request.session_id} not found"
+            ),
         }
     except Exception as e:
         logger.error(f"Error setting active session: {e}")
