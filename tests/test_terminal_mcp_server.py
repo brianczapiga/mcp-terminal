@@ -17,7 +17,7 @@ class TestTerminalManager:
 
     def test_detect_terminal_app(self):
         """Test terminal app detection."""
-        with patch.object(self.manager, '_run_applescript') as mock_run:
+        with patch.object(self.manager, "_run_applescript") as mock_run:
             # Test iTerm2 detection
             mock_run.return_value = "iTerm2"
             result = self.manager._detect_terminal_app()
@@ -30,7 +30,7 @@ class TestTerminalManager:
 
     def test_run_applescript_success(self):
         """Test successful AppleScript execution."""
-        with patch('subprocess.run') as mock_run:
+        with patch("subprocess.run") as mock_run:
             mock_process = Mock()
             mock_process.returncode = 0
             mock_process.stdout = b"test output"
@@ -41,7 +41,7 @@ class TestTerminalManager:
 
     def test_run_applescript_failure(self):
         """Test AppleScript execution failure."""
-        with patch('subprocess.run') as mock_run:
+        with patch("subprocess.run") as mock_run:
             mock_process = Mock()
             mock_process.returncode = 1
             mock_process.stderr = b"error message"
@@ -50,12 +50,12 @@ class TestTerminalManager:
             result = self.manager._run_applescript("test script")
             assert result == ""
 
-    @patch.object(TerminalManager, '_run_applescript')
+    @patch.object(TerminalManager, "_run_applescript")
     def test_scan_sessions(self, mock_run_applescript):
         """Test session scanning."""
         # Mock AppleScript response for session scanning
         mock_run_applescript.return_value = "session1,session2"
-        
+
         sessions = self.manager.scan_sessions()
         assert isinstance(sessions, list)
 
@@ -68,11 +68,11 @@ class TestTerminalManager:
             name="Test Session",
             tty_device="/dev/ttys000",
             last_activity=1234567890.0,
-            is_active=True
+            is_active=True,
         )
         self.manager.sessions["test_session"] = session_info
 
-        with patch.object(self.manager, '_run_applescript') as mock_run:
+        with patch.object(self.manager, "_run_applescript") as mock_run:
             mock_run.return_value = "test content"
             content = self.manager.get_session_content("test_session", lines=10)
             assert content == "test content"
@@ -86,11 +86,11 @@ class TestTerminalManager:
             name="Test Session",
             tty_device="/dev/ttys000",
             last_activity=1234567890.0,
-            is_active=True
+            is_active=True,
         )
         self.manager.sessions["test_session"] = session_info
 
-        with patch.object(self.manager, '_run_applescript') as mock_run:
+        with patch.object(self.manager, "_run_applescript") as mock_run:
             mock_run.return_value = "success"
             result = self.manager.send_input("test_session", "ls -la", execute=True)
             assert result is True
@@ -104,7 +104,7 @@ class TestTerminalManager:
             name="Test Session",
             tty_device="/dev/ttys000",
             last_activity=1234567890.0,
-            is_active=False
+            is_active=False,
         )
         self.manager.sessions["test_session"] = session_info
 
@@ -126,11 +126,11 @@ class TestTerminalManager:
             name="Test Session",
             tty_device="/dev/ttys000",
             last_activity=1234567890.0,
-            is_active=True
+            is_active=True,
         )
         self.manager.sessions["test_session"] = session_info
 
-        with patch.object(self.manager, '_run_applescript') as mock_run:
+        with patch.object(self.manager, "_run_applescript") as mock_run:
             mock_run.return_value = "scrolled content"
             content = self.manager.scroll_back("test_session", pages=1)
             assert content == "scrolled content"
@@ -147,9 +147,9 @@ class TestSessionInfo:
             name="Test Session",
             tty_device="/dev/ttys000",
             last_activity=1234567890.0,
-            is_active=True
+            is_active=True,
         )
-        
+
         assert session.window_id == "1"
         assert session.tab_id == "1"
         assert session.name == "Test Session"
@@ -165,9 +165,9 @@ class TestSessionInfo:
             name="Test Session",
             tty_device=None,
             last_activity=1234567890.0,
-            is_active=False
+            is_active=False,
         )
-        
+
         assert session.tty_device is None
         assert session.is_active is False
 
@@ -193,4 +193,4 @@ class TestIntegration:
 
 
 if __name__ == "__main__":
-    pytest.main([__file__]) 
+    pytest.main([__file__])
