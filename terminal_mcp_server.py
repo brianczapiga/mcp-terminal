@@ -19,7 +19,8 @@ from pydantic import BaseModel, Field
 
 # Configure logging
 logging.basicConfig(
-    level=logging.DEBUG, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    level=logging.DEBUG,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 )
 logger = logging.getLogger(__name__)
 
@@ -27,7 +28,12 @@ logger = logging.getLogger(__name__)
 # Security: Readonly mode check
 def is_readonly_mode() -> bool:
     """Check if the server is running in readonly mode."""
-    return os.getenv("MCP_TERMINAL_READONLY", "0").lower() in ("1", "true", "yes", "on")
+    return os.getenv("MCP_TERMINAL_READONLY", "0").lower() in (
+        "1",
+        "true",
+        "yes",
+        "on",
+    )
 
 
 @dataclass
@@ -58,7 +64,9 @@ class TerminalManager:
     def __init__(self):
         self.sessions: Dict[str, SessionInfo] = {}
         self.active_session_id: Optional[str] = None
-        self.output_buffers: Dict[str, deque] = defaultdict(lambda: deque(maxlen=500))
+        self.output_buffers: Dict[str, deque] = defaultdict(
+            lambda: deque(maxlen=500)
+        )
         self.last_scan_time = 0
         self.scan_interval = 2.0  # seconds
         self.terminal_app = self._detect_terminal_app()
@@ -107,7 +115,10 @@ class TerminalManager:
         try:
             logger.debug(f"Executing AppleScript: {script[:100]}...")
             result = subprocess.run(
-                ["osascript", "-e", script], capture_output=True, text=True, timeout=10
+                ["osascript", "-e", script],
+                capture_output=True,
+                text=True,
+                timeout=10,
             )
             if result.returncode != 0:
                 logger.error(f"AppleScript error: {result.stderr}")
@@ -126,7 +137,9 @@ class TerminalManager:
         current_time = time.time()
         if current_time - self.last_scan_time < self.scan_interval:
             time_diff = current_time - self.last_scan_time
-            logger.info(f"Using cached sessions (scanned {time_diff:.1f}s ago)")
+            logger.info(
+                f"Using cached sessions (scanned {time_diff:.1f}s ago)"
+            )
             return list(self.sessions.values())
 
         logger.info(f"Scanning {self.terminal_app} sessions...")
@@ -205,7 +218,11 @@ class TerminalManager:
                 i = 0
                 while i < len(lines):
                     line = lines[i].strip()
-                    if line and not line.startswith('"') and not line.startswith("{"):
+                    if (
+                        line
+                        and not line.startswith('"')
+                        and not line.startswith("{")
+                    ):
                         # This should be a session entry
                         parts = line.split(", ")
                         if len(parts) >= 5:
@@ -220,7 +237,9 @@ class TerminalManager:
                                 window_id=window_id,
                                 tab_id=tab_id,
                                 name=name,
-                                tty_device=tty if tty != "missing value" else None,
+                                tty_device=(
+                                    tty if tty != "missing value" else None
+                                ),
                                 last_activity=time.time(),
                                 is_active=busy,
                             )
@@ -426,7 +445,9 @@ class TerminalManager:
         lines_list = content.split("\n")
         return "\n".join(lines_list[-lines:]) if lines_list else ""
 
-    def send_input(self, session_id: str, text: str, execute: bool = True) -> bool:
+    def send_input(
+        self, session_id: str, text: str, execute: bool = True
+    ) -> bool:
         """Send input to a specific session."""
         if session_id not in self.sessions:
             logger.error(f"Session {session_id} not found")
@@ -673,16 +694,20 @@ class SetActiveSessionRequest(BaseModel):
 
 class GetScreenRequest(BaseModel):
     lines: int = Field(default=100, description="Number of lines to retrieve")
-    mode: str = Field(default="focus", description="Mode: focus, recent-output, manual")
+    mode: str = Field(
+        default="focus", description="Mode: focus, recent-output, manual"
+    )
 
 
 class SendInputRequest(BaseModel):
     text: str = Field(..., description="Text to send to the terminal")
     execute: bool = Field(
-        default=True, description="Whether to execute the command (press Enter)"
+        default=True,
+        description="Whether to execute the command (press Enter)",
     )
     session_id: Optional[str] = Field(
-        None, description="Session ID to send to (uses active if not specified)"
+        None,
+        description="Session ID to send to (uses active if not specified)",
     )
 
 
@@ -698,21 +723,24 @@ class SendKeypressRequest(BaseModel):
         default=None, description="Modifier keys (e.g., ['command', 'shift'])"
     )
     session_id: Optional[str] = Field(
-        None, description="Session ID to send to (uses active if not specified)"
+        None,
+        description="Session ID to send to (uses active if not specified)",
     )
 
 
 class PasteTextRequest(BaseModel):
     text: str = Field(..., description="Text to paste into the terminal")
     session_id: Optional[str] = Field(
-        None, description="Session ID to send to (uses active if not specified)"
+        None,
+        description="Session ID to send to (uses active if not specified)",
     )
 
 
 class ScrollBackRequest(BaseModel):
     pages: int = Field(default=1, description="Number of pages to scroll back")
     session_id: Optional[str] = Field(
-        None, description="Session ID to scroll back (uses active if not specified)"
+        None,
+        description="Session ID to scroll back (uses active if not specified)",
     )
 
 
@@ -840,7 +868,9 @@ including:
 
 
 @server.prompt("terminal_command_suggestion")
-async def terminal_command_suggestion(session_id: str, context: str = "") -> str:
+async def terminal_command_suggestion(
+    session_id: str, context: str = ""
+) -> str:
     """Suggest the next command based on current terminal state.
 
     This prompt provides a template for suggesting the next command to run.
@@ -976,7 +1006,7 @@ async def list_sessions() -> ListSessionsResponse:
 
 @server.tool()
 async def set_active_session(
-    request: SetActiveSessionRequest,
+    session_id: str = "", request: Optional[Union[Dict[str, Any], str]] = None
 ) -> Dict[str, Union[bool, str]]:
     """Set the active session for terminal operations.
 
@@ -992,24 +1022,20 @@ async def set_active_session(
     The session_id should be in the format "window_id_tab_id" (e.g., "75294_1").
     """
     try:
-        # Handle Void's request wrapping pattern and ensure we have valid defaults
-        try:
-            session_id = (
-                request.session_id
-                if hasattr(request, 'session_id') and request.session_id is not None
-                else ""
-            )
-        except (AttributeError, TypeError):
-            # Fallback to defaults if request parsing fails
-            session_id = ""
+        # Handle Void's request wrapping pattern
+        if request is not None:
+            if isinstance(request, dict):
+                session_id = request.get("session_id", session_id)
+            elif isinstance(request, str):
+                # Empty string or any string - use defaults
+                session_id = ""
 
-        logger.info(f"set_active_session called with session_id='{session_id}'")
+        logger.info(
+            f"set_active_session called with session_id='{session_id}'"
+        )
 
         if not session_id:
-            return {
-                "success": False,
-                "message": "No session_id provided"
-            }
+            return {"success": False, "message": "No session_id provided"}
 
         success = terminal_manager.set_active_session(session_id)
         return {
@@ -1027,7 +1053,9 @@ async def set_active_session(
 
 @server.tool()
 async def get_screen(
-    request: GetScreenRequest,
+    lines: int = 100,
+    mode: str = "focus",
+    request: Optional[Union[Dict[str, Any], str]] = None,
 ) -> Dict[str, Union[str, List[Dict[str, str]]]]:
     """Get the current screen contents of terminal sessions.
 
@@ -1054,22 +1082,14 @@ async def get_screen(
 
     """
     try:
-        # Handle Void's request wrapping pattern and ensure we have valid defaults
-        try:
-            lines = (
-                request.lines
-                if hasattr(request, 'lines') and request.lines is not None
-                else 100
-            )
-            mode = (
-                request.mode
-                if hasattr(request, 'mode') and request.mode is not None
-                else 'focus'
-            )
-        except (AttributeError, TypeError):
-            # Fallback to defaults if request parsing fails
-            lines = 100
-            mode = 'focus'
+        # Handle Void's request wrapping pattern
+        if request is not None:
+            if isinstance(request, dict):
+                lines = request.get("lines", lines)
+                mode = request.get("mode", mode)
+            elif isinstance(request, str):
+                # Empty string or any string - use defaults
+                pass  # Keep the default values
 
         logger.info(f"get_screen called with lines={lines}, mode={mode}")
 
@@ -1091,7 +1111,10 @@ async def get_screen(
                             "session_id": session_id,
                         }
 
-            return {"mode": "recent-output", "content": "No recent output found"}
+            return {
+                "mode": "recent-output",
+                "content": "No recent output found",
+            }
 
         else:  # focus mode (default)
             if not terminal_manager.active_session_id:
@@ -1099,7 +1122,9 @@ async def get_screen(
                 sessions = terminal_manager.scan_sessions()
                 if sessions:
                     most_recent = max(sessions, key=lambda s: s.last_activity)
-                    session_id = f"{most_recent.window_id}_{most_recent.tab_id}"
+                    session_id = (
+                        f"{most_recent.window_id}_{most_recent.tab_id}"
+                    )
                     terminal_manager.set_active_session(session_id)
 
             if terminal_manager.active_session_id:
@@ -1110,7 +1135,10 @@ async def get_screen(
                     "session_id": terminal_manager.active_session_id,
                 }
             else:
-                return {"mode": "focus", "content": "No active session available"}
+                return {
+                    "mode": "focus",
+                    "content": "No active session available",
+                }
 
     except Exception as e:
         logger.error(f"Error getting screen content: {e}")
@@ -1118,61 +1146,54 @@ async def get_screen(
 
 
 @server.tool()
-async def send_input(request: SendInputRequest) -> Dict[str, Union[bool, str]]:
+async def send_input(
+    text: str = "",
+    execute: bool = True,
+    session_id: Optional[str] = None,
+    request: Optional[Union[Dict[str, Any], str]] = None,
+) -> Dict[str, Union[bool, str]]:
     """Send input (commands or keystrokes) to the terminal."""
     try:
-        # Handle Void's request wrapping pattern and ensure we have valid defaults
-        try:
-            text = (
-                request.text
-                if hasattr(request, 'text') and request.text is not None
-                else ""
-            )
-            execute = (
-                request.execute
-                if hasattr(request, 'execute') and request.execute is not None
-                else True
-            )
-            session_id = (
-                request.session_id
-                if hasattr(request, 'session_id') and request.session_id is not None
-                else None
-            )
-        except (AttributeError, TypeError):
-            # Fallback to defaults if request parsing fails
-            text = ""
-            execute = True
-            session_id = None
+        # Handle Void's request wrapping pattern
+        if request is not None:
+            if isinstance(request, dict):
+                text = request.get("text", text)
+                execute = request.get("execute", execute)
+                session_id = request.get("session_id", session_id)
+            elif isinstance(request, str):
+                # If request is a string, treat it as the text to send
+                text = request
+                execute = execute  # Keep the default
+                session_id = session_id  # Keep the default
 
         logger.info(
-            f"send_input called with text='{text}', execute={execute}, "
-            f"session_id={session_id}"
+            f"send_input called with text='{text}', execute={execute}, session_id='{session_id}'"
         )
 
-        # Security: Check readonly mode
         if is_readonly_mode():
-            logger.warning(
-                "Input injection blocked: Server is running in readonly mode"
-            )
             return {
                 "success": False,
-                "message": (
-                    "Input injection is disabled. Set MCP_TERMINAL_READONLY=0 "
-                    "to enable."
-                ),
+                "message": "Input injection is disabled in readonly mode",
             }
 
-        session_id = session_id or terminal_manager.active_session_id
-        if not session_id:
-            return {"success": False, "message": "No active session set"}
+        if not text:
+            return {"success": False, "message": "No text provided to send"}
 
-        success = terminal_manager.send_input(session_id, text, execute)
+        # Use active session if none specified
+        target_session_id = session_id or terminal_manager.active_session_id
+        if not target_session_id:
+            return {
+                "success": False,
+                "message": "No session specified and no active session available",
+            }
+
+        success = terminal_manager.send_input(target_session_id, text, execute)
         return {
             "success": success,
             "message": (
-                f"Input sent to session {session_id}"
+                f"Input sent to session {target_session_id}"
                 if success
-                else f"Failed to send input to session {session_id}"
+                else f"Failed to send input to session {target_session_id}"
             ),
         }
     except Exception as e:
@@ -1181,35 +1202,56 @@ async def send_input(request: SendInputRequest) -> Dict[str, Union[bool, str]]:
 
 
 @server.tool()
-async def send_keypress(request: SendKeypressRequest) -> Dict[str, Union[bool, str]]:
+async def send_keypress(
+    key: str = "",
+    modifiers: Optional[List[str]] = None,
+    session_id: Optional[str] = None,
+    request: Optional[Union[Dict[str, Any], str]] = None,
+) -> Dict[str, Union[bool, str]]:
     """Send a specific keypress to the terminal."""
     try:
-        # Security: Check readonly mode
+        # Handle Void's request wrapping pattern
+        if request is not None:
+            if isinstance(request, dict):
+                key = request.get("key", key)
+                modifiers = request.get("modifiers", modifiers)
+                session_id = request.get("session_id", session_id)
+            elif isinstance(request, str):
+                # If request is a string, treat it as the key to press
+                key = request
+                modifiers = modifiers  # Keep the default
+                session_id = session_id  # Keep the default
+
+        logger.info(
+            f"send_keypress called with key='{key}', modifiers={modifiers}, session_id='{session_id}'"
+        )
+
         if is_readonly_mode():
-            logger.warning(
-                "Keypress injection blocked: Server is running in readonly mode"
-            )
             return {
                 "success": False,
-                "message": (
-                    "Input injection is disabled. Set MCP_TERMINAL_READONLY=0 "
-                    "to enable."
-                ),
+                "message": "Input injection is disabled in readonly mode",
             }
 
-        session_id = request.session_id or terminal_manager.active_session_id
-        if not session_id:
-            return {"success": False, "message": "No active session set"}
+        if not key:
+            return {"success": False, "message": "No key provided to press"}
+
+        # Use active session if none specified
+        target_session_id = session_id or terminal_manager.active_session_id
+        if not target_session_id:
+            return {
+                "success": False,
+                "message": "No session specified and no active session available",
+            }
 
         success = terminal_manager.send_keypress(
-            session_id, request.key, request.modifiers
+            target_session_id, key, modifiers
         )
         return {
             "success": success,
             "message": (
-                f"Keypress sent to session {session_id}"
+                f"Keypress sent to session {target_session_id}"
                 if success
-                else f"Failed to send keypress to session {session_id}"
+                else f"Failed to send keypress to session {target_session_id}"
             ),
         }
     except Exception as e:
@@ -1218,31 +1260,51 @@ async def send_keypress(request: SendKeypressRequest) -> Dict[str, Union[bool, s
 
 
 @server.tool()
-async def paste_text(request: PasteTextRequest) -> Dict[str, Union[bool, str]]:
+async def paste_text(
+    text: str = "",
+    session_id: Optional[str] = None,
+    request: Optional[Union[Dict[str, Any], str]] = None,
+) -> Dict[str, Union[bool, str]]:
     """Paste text into the terminal using clipboard."""
     try:
-        # Security: Check readonly mode
+        # Handle Void's request wrapping pattern
+        if request is not None:
+            if isinstance(request, dict):
+                text = request.get("text", text)
+                session_id = request.get("session_id", session_id)
+            elif isinstance(request, str):
+                # If request is a string, treat it as the text to paste
+                text = request
+                session_id = session_id  # Keep the default
+
+        logger.info(
+            f"paste_text called with text='{text}', session_id='{session_id}'"
+        )
+
         if is_readonly_mode():
-            logger.warning("Text paste blocked: Server is running in readonly mode")
             return {
                 "success": False,
-                "message": (
-                    "Input injection is disabled. Set MCP_TERMINAL_READONLY=0 "
-                    "to enable."
-                ),
+                "message": "Input injection is disabled in readonly mode",
             }
 
-        session_id = request.session_id or terminal_manager.active_session_id
-        if not session_id:
-            return {"success": False, "message": "No active session set"}
+        if not text:
+            return {"success": False, "message": "No text provided to paste"}
 
-        success = terminal_manager.paste_text(session_id, request.text)
+        # Use active session if none specified
+        target_session_id = session_id or terminal_manager.active_session_id
+        if not target_session_id:
+            return {
+                "success": False,
+                "message": "No session specified and no active session available",
+            }
+
+        success = terminal_manager.paste_text(target_session_id, text)
         return {
             "success": success,
             "message": (
-                f"Text pasted to session {session_id}"
+                f"Text pasted to session {target_session_id}"
                 if success
-                else f"Failed to paste text to session {session_id}"
+                else f"Failed to paste text to session {target_session_id}"
             ),
         }
     except Exception as e:
@@ -1251,22 +1313,47 @@ async def paste_text(request: PasteTextRequest) -> Dict[str, Union[bool, str]]:
 
 
 @server.tool()
-async def scroll_back(request: ScrollBackRequest) -> Dict[str, str]:
+async def scroll_back(
+    pages: int = 1,
+    session_id: Optional[str] = None,
+    request: Optional[Union[Dict[str, Any], str]] = None,
+) -> Dict[str, str]:
     """Scroll back to get older content from the terminal buffer."""
     try:
-        session_id = request.session_id or terminal_manager.active_session_id
-        if not session_id:
-            return {"content": "No active session set"}
+        # Handle Void's request wrapping pattern
+        if request is not None:
+            if isinstance(request, dict):
+                pages = request.get("pages", pages)
+                session_id = request.get("session_id", session_id)
+            elif isinstance(request, str):
+                # If request is a string, use defaults
+                pages = pages  # Keep the default
+                session_id = session_id  # Keep the default
 
-        content = terminal_manager.scroll_back(session_id, request.pages)
-        return {"content": content, "session_id": session_id}
+        logger.info(
+            f"scroll_back called with pages={pages}, session_id='{session_id}'"
+        )
+
+        # Use active session if none specified
+        target_session_id = session_id or terminal_manager.active_session_id
+        if not target_session_id:
+            return {
+                "content": "No session specified and no active session available"
+            }
+
+        content = terminal_manager.scroll_back(target_session_id, pages)
+        return {"content": content}
     except Exception as e:
         logger.error(f"Error scrolling back: {e}")
         return {"content": f"Error: {str(e)}"}
 
 
 @server.tool()
-async def get_all_terminal_info(request: GetScreenRequest) -> Dict[str, Any]:
+async def get_all_terminal_info(
+    lines: int = 100,
+    mode: str = "focus",
+    request: Optional[Union[Dict[str, Any], str]] = None,
+) -> Dict[str, Any]:
     """Get comprehensive information about all terminal sessions in one call.
 
     This tool returns everything you need to know about terminal sessions in
@@ -1291,22 +1378,14 @@ async def get_all_terminal_info(request: GetScreenRequest) -> Dict[str, Any]:
     try:
         logger.info("get_all_terminal_info tool called")
 
-        # Handle Void's request wrapping pattern and ensure we have valid defaults
-        try:
-            lines = (
-                request.lines
-                if hasattr(request, 'lines') and request.lines is not None
-                else 100
-            )
-            mode = (
-                request.mode
-                if hasattr(request, 'mode') and request.mode is not None
-                else 'focus'
-            )
-        except (AttributeError, TypeError):
-            # Fallback to defaults if request parsing fails
-            lines = 100
-            mode = 'focus'
+        # Handle Void's request wrapping pattern
+        if request is not None:
+            if isinstance(request, dict):
+                lines = request.get("lines", lines)
+                mode = request.get("mode", mode)
+            elif isinstance(request, str):
+                # Empty string or any string - use defaults
+                pass  # Keep the default values
 
         logger.info(f"Using lines={lines}, mode={mode}")
 
@@ -1342,7 +1421,9 @@ async def get_all_terminal_info(request: GetScreenRequest) -> Dict[str, Any]:
         elif session_ids:
             # If no active session, use the most recently active one
             most_recent = max(sessions, key=lambda s: s.last_activity)
-            default_session_id = f"{most_recent.window_id}_{most_recent.tab_id}"
+            default_session_id = (
+                f"{most_recent.window_id}_{most_recent.tab_id}"
+            )
 
         # Create comprehensive response
         response = {
@@ -1357,7 +1438,9 @@ async def get_all_terminal_info(request: GetScreenRequest) -> Dict[str, Any]:
             ),
         }
 
-        logger.info(f"Returning comprehensive info for {len(sessions)} sessions")
+        logger.info(
+            f"Returning comprehensive info for {len(sessions)} sessions"
+        )
         return response
 
     except Exception as e:
@@ -1379,6 +1462,8 @@ if __name__ == "__main__":
     import sys
 
     print("Starting Terminal MCP Server (stdio transport)...", file=sys.stderr)
-    print("This server is ready to communicate via stdin/stdout", file=sys.stderr)
+    print(
+        "This server is ready to communicate via stdin/stdout", file=sys.stderr
+    )
     logger.info("Starting server with stdio transport")
     server.run(transport="stdio")

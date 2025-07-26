@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """
 Health check script for Terminal MCP Server.
-This script verifies that the server can be imported and basic functionality works.
+This script verifies that the server can be imported and basic functionality
+works.
 """
 
 import sys
@@ -78,15 +79,20 @@ def check_terminal_apps():
 def check_permissions():
     """Check if Accessibility permissions are granted."""
     print("⚠️  Checking Accessibility permissions...")
-    print("   Please ensure Terminal.app or iTerm2 has Accessibility permissions")
-    print("   Go to System Preferences → Security & Privacy → Privacy → Accessibility")
+    print(
+        "   Please ensure Terminal.app or iTerm2 has Accessibility permissions"
+    )
+    print(
+        "   Go to System Preferences → Security & Privacy → Privacy → "
+        "Accessibility"
+    )
     return True
 
 
 def check_server_import():
     """Check if the server can be imported."""
     try:
-        from terminal_mcp_server import TerminalManager, SessionInfo  # noqa: F401
+        from terminal_mcp_server import TerminalManager  # noqa: F401
 
         print("✅ Server module can be imported")
         return True
