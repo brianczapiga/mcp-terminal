@@ -1,0 +1,16 @@
+{
+  "tools": [
+    {
+      "name": "terminal-mcp",
+      "type": "mcp",
+      "config": {
+        "command": "python",
+        "args": ["terminal_mcp_server.py"],
+        "cwd": "/path/to/mcp-terminal",
+        "env": {
+          "PYTHONPATH": "/path/to/mcp-terminal"
+        }
+      }
+    }
+  ]
+} 
