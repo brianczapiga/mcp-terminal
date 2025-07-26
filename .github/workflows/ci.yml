@@ -54,7 +54,7 @@ jobs:
     
     - name: Type check with mypy
       run: |
-        mypy terminal_mcp_server.py health_check.py tests/ --ignore-missing-imports --no-warn-return-any --no-warn-unused-configs --no-disallow-untyped-defs --no-disallow-incomplete-defs --no-check-untyped-defs --no-disallow-untyped-decorators --no-no-implicit-optional --no-warn-redundant-casts --no-warn-unused-ignores --no-warn-no-return --no-warn-unreachable --no-strict-equality
+        mypy terminal_mcp_server.py health_check.py tests/ --ignore-missing-imports --disallow-untyped-defs=False --disallow-incomplete-defs=False --check-untyped-defs=False --disallow-untyped-decorators=False
     
     - name: Test with pytest
       run: |
