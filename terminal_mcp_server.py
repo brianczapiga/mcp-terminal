@@ -992,13 +992,32 @@ async def set_active_session(
     The session_id should be in the format "window_id_tab_id" (e.g., "75294_1").
     """
     try:
-        success = terminal_manager.set_active_session(request.session_id)
+        # Handle Void's request wrapping pattern and ensure we have valid defaults
+        try:
+            session_id = (
+                request.session_id
+                if hasattr(request, 'session_id') and request.session_id is not None
+                else ""
+            )
+        except (AttributeError, TypeError):
+            # Fallback to defaults if request parsing fails
+            session_id = ""
+
+        logger.info(f"set_active_session called with session_id='{session_id}'")
+
+        if not session_id:
+            return {
+                "success": False,
+                "message": "No session_id provided"
+            }
+
+        success = terminal_manager.set_active_session(session_id)
         return {
             "success": success,
             "message": (
-                f"Active session set to {request.session_id}"
+                f"Active session set to {session_id}"
                 if success
-                else f"Session {request.session_id} not found"
+                else f"Session {session_id} not found"
             ),
         }
     except Exception as e:
@@ -1035,7 +1054,26 @@ async def get_screen(
 
     """
     try:
-        if request.mode == "recent-output":
+        # Handle Void's request wrapping pattern and ensure we have valid defaults
+        try:
+            lines = (
+                request.lines
+                if hasattr(request, 'lines') and request.lines is not None
+                else 100
+            )
+            mode = (
+                request.mode
+                if hasattr(request, 'mode') and request.mode is not None
+                else 'focus'
+            )
+        except (AttributeError, TypeError):
+            # Fallback to defaults if request parsing fails
+            lines = 100
+            mode = 'focus'
+
+        logger.info(f"get_screen called with lines={lines}, mode={mode}")
+
+        if mode == "recent-output":
             # Find most recent TTY and map to session
             recent_tty = terminal_manager.get_most_recent_tty()
             if recent_tty:
@@ -1045,7 +1083,7 @@ async def get_screen(
                         session_id = f"{session.window_id}_{session.tab_id}"
                         terminal_manager.set_active_session(session_id)
                         content = terminal_manager.get_session_content(
-                            session_id, request.lines
+                            session_id, lines
                         )
                         return {
                             "mode": "recent-output",
@@ -1065,7 +1103,7 @@ async def get_screen(
                     terminal_manager.set_active_session(session_id)
 
             if terminal_manager.active_session_id:
-                content = terminal_manager.get_active_session_content(request.lines)
+                content = terminal_manager.get_active_session_content(lines)
                 return {
                     "mode": "focus",
                     "content": content,
@@ -1083,6 +1121,34 @@ async def get_screen(
 async def send_input(request: SendInputRequest) -> Dict[str, Union[bool, str]]:
     """Send input (commands or keystrokes) to the terminal."""
     try:
+        # Handle Void's request wrapping pattern and ensure we have valid defaults
+        try:
+            text = (
+                request.text
+                if hasattr(request, 'text') and request.text is not None
+                else ""
+            )
+            execute = (
+                request.execute
+                if hasattr(request, 'execute') and request.execute is not None
+                else True
+            )
+            session_id = (
+                request.session_id
+                if hasattr(request, 'session_id') and request.session_id is not None
+                else None
+            )
+        except (AttributeError, TypeError):
+            # Fallback to defaults if request parsing fails
+            text = ""
+            execute = True
+            session_id = None
+
+        logger.info(
+            f"send_input called with text='{text}', execute={execute}, "
+            f"session_id={session_id}"
+        )
+
         # Security: Check readonly mode
         if is_readonly_mode():
             logger.warning(
@@ -1096,11 +1162,11 @@ async def send_input(request: SendInputRequest) -> Dict[str, Union[bool, str]]:
                 ),
             }
 
-        session_id = request.session_id or terminal_manager.active_session_id
+        session_id = session_id or terminal_manager.active_session_id
         if not session_id:
             return {"success": False, "message": "No active session set"}
 
-        success = terminal_manager.send_input(session_id, request.text, request.execute)
+        success = terminal_manager.send_input(session_id, text, execute)
         return {
             "success": success,
             "message": (
@@ -1225,6 +1291,25 @@ async def get_all_terminal_info(request: GetScreenRequest) -> Dict[str, Any]:
     try:
         logger.info("get_all_terminal_info tool called")
 
+        # Handle Void's request wrapping pattern and ensure we have valid defaults
+        try:
+            lines = (
+                request.lines
+                if hasattr(request, 'lines') and request.lines is not None
+                else 100
+            )
+            mode = (
+                request.mode
+                if hasattr(request, 'mode') and request.mode is not None
+                else 'focus'
+            )
+        except (AttributeError, TypeError):
+            # Fallback to defaults if request parsing fails
+            lines = 100
+            mode = 'focus'
+
+        logger.info(f"Using lines={lines}, mode={mode}")
+
         # Get all sessions
         sessions = terminal_manager.scan_sessions()
         logger.info(f"Found {len(sessions)} sessions")
@@ -1239,7 +1324,7 @@ async def get_all_terminal_info(request: GetScreenRequest) -> Dict[str, Any]:
             session_ids.append(session_id)
 
             # Get content for this session
-            content = terminal_manager.get_session_content(session_id, request.lines)
+            content = terminal_manager.get_session_content(session_id, lines)
             session_contents[session_id] = content
 
             # Store additional session info
