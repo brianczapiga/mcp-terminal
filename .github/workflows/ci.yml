@@ -54,7 +54,7 @@ jobs:
     
     - name: Type check with mypy
       run: |
-        mypy terminal_mcp_server.py health_check.py tests/ --ignore-missing-imports --disallow-untyped-defs=False --disallow-incomplete-defs=False --check-untyped-defs=False --disallow-untyped-decorators=False
+        mypy terminal_mcp_server.py health_check.py tests/ --ignore-missing-imports --no-disallow-untyped-defs --no-disallow-incomplete-defs --no-check-untyped-defs --no-disallow-untyped-decorators
     
     - name: Test with pytest
       run: |
