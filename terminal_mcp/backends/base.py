@@ -15,6 +15,17 @@ from terminal_mcp.errors import (
 from terminal_mcp.models import SessionInfo
 
 
+def applescript_string(value: str) -> str:
+    """Return *value* as a safely escaped AppleScript string literal."""
+    escaped = (
+        value.replace("\\", "\\\\")
+        .replace('"', '\\"')
+        .replace("\r", "\\r")
+        .replace("\n", "\\n")
+    )
+    return f'"{escaped}"'
+
+
 @runtime_checkable
 class TerminalBackend(Protocol):
     """Operations implemented by a supported terminal application."""

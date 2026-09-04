@@ -3,3 +3,8 @@
 from terminal_mcp.backends.base import AppleScriptRunner, TerminalBackend
 
 __all__ = ["AppleScriptRunner", "TerminalBackend"]
+from terminal_mcp.backends.detect import detect_backend
+from terminal_mcp.backends.iterm2 import ITerm2Backend
+from terminal_mcp.backends.macos_terminal import MacOSTerminalBackend
+
+__all__ = ["ITerm2Backend", "MacOSTerminalBackend", "detect_backend"]
