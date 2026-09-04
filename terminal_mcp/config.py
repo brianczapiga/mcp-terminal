@@ -45,11 +45,13 @@ class Settings:
 
     @classmethod
     def load(cls, dotenv_path: str | PathLike[str] | None = None) -> "Settings":
-        selected_path = (
-            Path(dotenv_path)
-            if dotenv_path is not None
-            else Path(os.getenv("MCP_TERMINAL_ENV_FILE", Path.cwd() / ".env"))
-        )
+        env_file = os.getenv("MCP_TERMINAL_ENV_FILE")
+        if dotenv_path is not None:
+            selected_path = Path(dotenv_path)
+        elif env_file and env_file.strip():
+            selected_path = Path(env_file)
+        else:
+            selected_path = Path.cwd() / ".env"
         load_dotenv(dotenv_path=selected_path, override=False)
         return cls(
             readonly=_boolean("MCP_TERMINAL_READONLY", True),

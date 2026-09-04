@@ -73,6 +73,17 @@ def test_env_file_variable_overrides_cwd_env_file(
     assert Settings.load().readonly is False
 
 
+@pytest.mark.parametrize("env_file", ["", "   "])
+def test_blank_env_file_variable_falls_back_to_cwd_env_file(
+    env_file: str, tmp_path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    (tmp_path / ".env").write_text("MCP_TERMINAL_READONLY=0\n")
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("MCP_TERMINAL_ENV_FILE", env_file)
+
+    assert Settings.load().readonly is False
+
+
 def test_explicit_env_file_overrides_env_file_variable(
     tmp_path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
