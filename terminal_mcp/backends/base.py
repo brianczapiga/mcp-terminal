@@ -43,7 +43,8 @@ class AppleScriptRunner:
     def run(self, script: str) -> str:
         try:
             result = subprocess.run(
-                ["osascript", "-e", script],
+                ["osascript", "-"],
+                input=script,
                 capture_output=True,
                 text=True,
                 timeout=self.timeout_seconds,
@@ -53,6 +54,8 @@ class AppleScriptRunner:
             raise ScriptTimedOut("AppleScript execution timed out") from None
         except FileNotFoundError:
             raise ApplicationUnavailable("osascript is unavailable") from None
+        except OSError:
+            raise ApplicationUnavailable("osascript could not be started") from None
 
         if result.returncode != 0:
             if self._is_automation_denial(result.stderr):
@@ -62,15 +65,15 @@ class AppleScriptRunner:
                 )
             raise ScriptFailed("AppleScript execution failed")
 
-        return result.stdout.strip()
+        return result.stdout.removesuffix("\n")
 
     @staticmethod
     def _is_automation_denial(stderr: str) -> bool:
         normalized = stderr.casefold()
         indicators = (
-            "not authorized",
-            "not permitted",
-            "permission denied",
+            "not authorized to send apple events",
+            "not permitted to send apple events",
+            "automation permission denied",
             "-1743",
         )
         return any(indicator in normalized for indicator in indicators)

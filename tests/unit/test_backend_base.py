@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import subprocess
+from collections.abc import Sequence
 from dataclasses import FrozenInstanceError
 from typing import Any
 
@@ -46,23 +47,26 @@ def test_terminal_backend_is_runtime_checkable() -> None:
             return None
 
         def send_keypress(
-            self, session: SessionInfo, key: str, modifiers: tuple[str, ...]
+            self, session: SessionInfo, key: str, modifiers: Sequence[str]
         ) -> None:
             return None
 
         def paste_text(self, session: SessionInfo, text: str) -> None:
             return None
 
-    assert isinstance(Backend(), TerminalBackend)
+    backend: TerminalBackend = Backend()
+    assert isinstance(backend, TerminalBackend)
 
 
-def test_run_returns_stripped_text_stdout(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_run_removes_only_process_framing_newline(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     def fake_run(*args: Any, **kwargs: Any) -> subprocess.CompletedProcess[str]:
-        return completed_process(stdout="  result text\n")
+        return completed_process(stdout="\n  indented text  \n\n")
 
     monkeypatch.setattr(subprocess, "run", fake_run)
 
-    assert AppleScriptRunner().run("return text") == "result text"
+    assert AppleScriptRunner().run("return text") == "\n  indented text  \n"
 
 
 def test_run_passes_configured_timeout_and_text_mode(
@@ -80,8 +84,9 @@ def test_run_passes_configured_timeout_and_text_mode(
     AppleScriptRunner(timeout_seconds=2.5).run("return 1")
 
     assert observed == {
-        "args": (["osascript", "-e", "return 1"],),
+        "args": (["osascript", "-"],),
         "kwargs": {
+            "input": "return 1",
             "capture_output": True,
             "text": True,
             "timeout": 2.5,
@@ -120,6 +125,21 @@ def test_run_classifies_generic_nonzero_exit(monkeypatch: pytest.MonkeyPatch) ->
     )
 
     with pytest.raises(ScriptFailed, match="AppleScript execution failed"):
+        AppleScriptRunner().run("broken script")
+
+
+def test_run_does_not_classify_unrelated_permission_denial_as_automation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        subprocess,
+        "run",
+        lambda *args, **kwargs: completed_process(
+            returncode=1, stderr="filesystem permission denied"
+        ),
+    )
+
+    with pytest.raises(ScriptFailed):
         AppleScriptRunner().run("broken script")
 
 
@@ -171,6 +191,22 @@ def test_run_maps_missing_osascript(monkeypatch: pytest.MonkeyPatch) -> None:
         AppleScriptRunner().run("return 1")
 
 
+def test_run_maps_launch_os_error_without_exposing_details(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    secret = "TOP-SECRET-EXECUTABLE-PATH"
+
+    def unavailable(*args: Any, **kwargs: Any) -> subprocess.CompletedProcess[str]:
+        raise PermissionError(secret)
+
+    monkeypatch.setattr(subprocess, "run", unavailable)
+
+    with pytest.raises(ApplicationUnavailable) as error:
+        AppleScriptRunner().run("return 1")
+
+    assert secret not in str(error.value)
+
+
 def test_run_does_not_expose_terminal_secrets(
     monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
 ) -> None:
@@ -188,3 +224,20 @@ def test_run_does_not_expose_terminal_secrets(
 
     assert secret not in str(error.value)
     assert secret not in caplog.text
+
+
+def test_run_keeps_terminal_secret_out_of_process_arguments(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    secret = "TOP-SECRET-TERMINAL-INPUT"
+    observed_argv: list[str] = []
+
+    def fake_run(argv: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
+        observed_argv.extend(argv)
+        return completed_process()
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    AppleScriptRunner().run(f'return "{secret}"')
+
+    assert all(secret not in argument for argument in observed_argv)
