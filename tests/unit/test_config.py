@@ -73,6 +73,16 @@ def test_env_file_variable_overrides_cwd_env_file(
     assert Settings.load().readonly is False
 
 
+def test_env_file_variable_trims_surrounding_whitespace(
+    tmp_path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    selected_env_file = tmp_path / "selected.env"
+    selected_env_file.write_text("MCP_TERMINAL_READONLY=0\n")
+    monkeypatch.setenv("MCP_TERMINAL_ENV_FILE", f"  {selected_env_file}  ")
+
+    assert Settings.load().readonly is False
+
+
 @pytest.mark.parametrize("env_file", ["", "   "])
 def test_blank_env_file_variable_falls_back_to_cwd_env_file(
     env_file: str, tmp_path, monkeypatch: pytest.MonkeyPatch
@@ -129,13 +139,34 @@ def test_parses_true_boolean_values(
     assert Settings.load().allow_self_target is True
 
 
-@pytest.mark.parametrize("value", ["0", "false", "NO", "off", "unexpected"])
-def test_other_boolean_values_are_false(
+@pytest.mark.parametrize("value", ["0", "false", "NO", "off"])
+def test_parses_false_boolean_values(
     value: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setenv("MCP_TERMINAL_DETECT_SELF_SESSION", value)
 
     assert Settings.load().detect_self_session is False
+
+
+@pytest.mark.parametrize("value", ["", "   ", "unexpected"])
+@pytest.mark.parametrize(
+    ("variable", "attribute", "default"),
+    [
+        ("MCP_TERMINAL_READONLY", "readonly", True),
+        ("MCP_TERMINAL_DETECT_SELF_SESSION", "detect_self_session", True),
+        ("MCP_TERMINAL_ALLOW_SELF_TARGET", "allow_self_target", False),
+    ],
+)
+def test_blank_or_malformed_boolean_values_use_setting_default(
+    variable: str,
+    attribute: str,
+    default: bool,
+    value: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv(variable, value)
+
+    assert getattr(Settings.load(), attribute) is default
 
 
 def test_parses_valid_log_level_case_insensitively(

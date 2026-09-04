@@ -8,13 +8,19 @@ from pathlib import Path
 from dotenv import dotenv_values
 
 TRUE_VALUES = frozenset({"1", "true", "yes", "on"})
+FALSE_VALUES = frozenset({"0", "false", "no", "off"})
 
 
 def _boolean(config: Mapping[str, str | None], name: str, default: bool) -> bool:
     value = config.get(name)
     if value is None:
         return default
-    return value.strip().lower() in TRUE_VALUES
+    normalized_value = value.strip().lower()
+    if normalized_value in TRUE_VALUES:
+        return True
+    if normalized_value in FALSE_VALUES:
+        return False
+    return default
 
 
 def _csv(config: Mapping[str, str | None], name: str) -> frozenset[str]:
@@ -50,7 +56,7 @@ class Settings:
         if dotenv_path is not None:
             selected_path = Path(dotenv_path)
         elif env_file and env_file.strip():
-            selected_path = Path(env_file)
+            selected_path = Path(env_file.strip())
         else:
             selected_path = Path.cwd() / ".env"
         config = dotenv_values(selected_path) | os.environ
