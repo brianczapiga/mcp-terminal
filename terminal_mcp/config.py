@@ -1,35 +1,36 @@
 import logging
 import os
+from collections.abc import Mapping
 from dataclasses import dataclass
 from os import PathLike
 from pathlib import Path
 
-from dotenv import load_dotenv
+from dotenv import dotenv_values
 
 TRUE_VALUES = frozenset({"1", "true", "yes", "on"})
 
 
-def _boolean(name: str, default: bool) -> bool:
-    value = os.getenv(name)
+def _boolean(config: Mapping[str, str | None], name: str, default: bool) -> bool:
+    value = config.get(name)
     if value is None:
         return default
     return value.strip().lower() in TRUE_VALUES
 
 
-def _csv(name: str) -> frozenset[str]:
+def _csv(config: Mapping[str, str | None], name: str) -> frozenset[str]:
     return frozenset(
-        part.strip() for part in os.getenv(name, "").split(",") if part.strip()
+        part.strip() for part in (config.get(name) or "").split(",") if part.strip()
     )
 
 
-def _ttys(name: str) -> frozenset[str]:
+def _ttys(config: Mapping[str, str | None], name: str) -> frozenset[str]:
     return frozenset(
-        tty if tty.startswith("/dev/") else f"/dev/{tty}" for tty in _csv(name)
+        tty if tty.startswith("/dev/") else f"/dev/{tty}" for tty in _csv(config, name)
     )
 
 
-def _log_level() -> int:
-    value = os.getenv("MCP_TERMINAL_LOG_LEVEL", "INFO").strip().upper()
+def _log_level(config: Mapping[str, str | None]) -> int:
+    value = (config.get("MCP_TERMINAL_LOG_LEVEL") or "INFO").strip().upper()
     level = getattr(logging, value, None)
     return level if isinstance(level, int) else logging.INFO
 
@@ -52,12 +53,14 @@ class Settings:
             selected_path = Path(env_file)
         else:
             selected_path = Path.cwd() / ".env"
-        load_dotenv(dotenv_path=selected_path, override=False)
+        config = dotenv_values(selected_path) | os.environ
         return cls(
-            readonly=_boolean("MCP_TERMINAL_READONLY", True),
-            excluded_ttys=_ttys("MCP_TERMINAL_EXCLUDED_TTYS"),
-            excluded_sessions=_csv("MCP_TERMINAL_EXCLUDED_SESSIONS"),
-            detect_self_session=_boolean("MCP_TERMINAL_DETECT_SELF_SESSION", True),
-            allow_self_target=_boolean("MCP_TERMINAL_ALLOW_SELF_TARGET", False),
-            log_level=_log_level(),
+            readonly=_boolean(config, "MCP_TERMINAL_READONLY", True),
+            excluded_ttys=_ttys(config, "MCP_TERMINAL_EXCLUDED_TTYS"),
+            excluded_sessions=_csv(config, "MCP_TERMINAL_EXCLUDED_SESSIONS"),
+            detect_self_session=_boolean(
+                config, "MCP_TERMINAL_DETECT_SELF_SESSION", True
+            ),
+            allow_self_target=_boolean(config, "MCP_TERMINAL_ALLOW_SELF_TARGET", False),
+            log_level=_log_level(config),
         )

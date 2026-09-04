@@ -96,6 +96,56 @@ def test_explicit_env_file_overrides_env_file_variable(
     assert Settings.load(explicit_env_file).readonly is False
 
 
+def test_sequential_explicit_env_files_are_independent(tmp_path) -> None:
+    first_env_file = tmp_path / "first.env"
+    first_env_file.write_text("MCP_TERMINAL_READONLY=0\n")
+    second_env_file = tmp_path / "second.env"
+    second_env_file.write_text("MCP_TERMINAL_READONLY=1\n")
+
+    assert Settings.load(first_env_file).readonly is False
+    assert Settings.load(second_env_file).readonly is True
+
+
+def test_security_defaults() -> None:
+    settings = Settings.load()
+
+    assert settings.excluded_sessions == frozenset()
+    assert settings.detect_self_session is True
+    assert settings.allow_self_target is False
+
+
+def test_parses_excluded_sessions(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("MCP_TERMINAL_EXCLUDED_SESSIONS", " alpha, , beta ")
+
+    assert Settings.load().excluded_sessions == frozenset({"alpha", "beta"})
+
+
+@pytest.mark.parametrize("value", ["1", "TRUE", "Yes", "on"])
+def test_parses_true_boolean_values(
+    value: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("MCP_TERMINAL_ALLOW_SELF_TARGET", value)
+
+    assert Settings.load().allow_self_target is True
+
+
+@pytest.mark.parametrize("value", ["0", "false", "NO", "off", "unexpected"])
+def test_other_boolean_values_are_false(
+    value: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("MCP_TERMINAL_DETECT_SELF_SESSION", value)
+
+    assert Settings.load().detect_self_session is False
+
+
+def test_parses_valid_log_level_case_insensitively(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("MCP_TERMINAL_LOG_LEVEL", "warning")
+
+    assert Settings.load().log_level == logging.WARNING
+
+
 def test_invalid_log_level_falls_back_to_info(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("MCP_TERMINAL_LOG_LEVEL", "not-a-level")
 
