@@ -32,6 +32,9 @@ def test_wheel_contains_runtime_and_console_entry_point(tmp_path: Path) -> None:
 import sys
 from importlib.metadata import distribution
 from pathlib import Path
+from sysconfig import get_path
+
+sys.path.insert(0, get_path("purelib"))
 import terminal_mcp
 
 dist = distribution("terminal-mcp-server")
