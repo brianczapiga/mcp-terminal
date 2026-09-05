@@ -1,54 +1,46 @@
-#!/bin/bash
+#!/bin/sh
 
-# Terminal MCP Server Installation Script
-# This script sets up the Terminal MCP Server for use
+set -eu
 
-set -e
+SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+cd "$SCRIPT_DIR"
 
-echo "🚀 Installing Terminal MCP Server..."
+echo "Installing Terminal MCP Server..."
 
-# Check if Python 3.8+ is available
-python_version=$(python3 -c 'import sys; print(".".join(map(str, sys.version_info[:2])))')
-required_version="3.8"
-
-if [ "$(printf '%s\n' "$required_version" "$python_version" | sort -V | head -n1)" != "$required_version" ]; then
-    echo "❌ Error: Python 3.8 or higher is required. Found: $python_version"
+if ! command -v python3 >/dev/null 2>&1; then
+    echo "Error: Python 3.10 or newer is required."
     exit 1
 fi
 
-echo "✅ Python version: $python_version"
-
-# Check if we're on macOS
-if [[ "$OSTYPE" != "darwin"* ]]; then
-    echo "❌ Error: This server only works on macOS"
+python_version=$(python3 -c 'import sys; print(".".join(map(str, sys.version_info[:3])))')
+if ! python3 -c 'import sys; raise SystemExit(sys.version_info < (3, 10))'; then
+    echo "Error: Python 3.10 or newer is required. Found: $python_version"
     exit 1
 fi
 
-echo "✅ macOS detected"
+if [ "$(uname -s)" != "Darwin" ]; then
+    echo "Error: Terminal MCP Server requires macOS."
+    exit 1
+fi
 
-# Create virtual environment
-echo "📦 Creating virtual environment..."
-python3 -m venv venv
+echo "Python $python_version detected."
+if command -v uv >/dev/null 2>&1; then
+    uv venv --python python3 .venv
+    uv pip install --python .venv/bin/python .
+else
+    python3 -m venv .venv
+    .venv/bin/python -m pip install .
+fi
 
-# Activate virtual environment
-echo "🔧 Activating virtual environment..."
-source venv/bin/activate
+if [ ! -f .env ]; then
+    cp env.example .env
+    echo "Created .env from env.example."
+    echo "Terminal writes are disabled by default until you edit .env."
+else
+    echo "Preserved existing .env."
+    echo "Inspect MCP_TERMINAL_READONLY in .env to confirm the current write policy."
+fi
 
-# Upgrade pip
-echo "⬆️  Upgrading pip..."
-pip install --upgrade pip
-
-# Install dependencies
-echo "📚 Installing dependencies..."
-pip install -r requirements.txt
-
-echo ""
-echo "✅ Installation complete!"
-echo ""
-echo "📋 Next steps:"
-echo "1. Activate the virtual environment: source venv/bin/activate"
-echo "2. Grant Accessibility permissions to Terminal.app/iTerm2 in System Preferences"
-echo "3. Run the server: python terminal_mcp_server.py"
-echo ""
-echo "📖 For more information, see the README.md file"
-echo "" 
+echo "Installation complete."
+echo "Run: .venv/bin/python -m terminal_mcp"
+echo "Health check: .venv/bin/python health_check.py"

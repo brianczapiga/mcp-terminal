@@ -1,81 +1,62 @@
-.PHONY: help setup install test run clean lint format check
+.PHONY: help setup install test run run-safe health clean lint format check dev-setup
 
-# Default target
+VENV := .venv
+PYTHON := $(VENV)/bin/python
+
 help:
 	@echo "Available commands:"
-	@echo "  setup     - Set up virtual environment and install dependencies"
-	@echo "  install   - Install dependencies in current environment"
-	@echo "  test      - Run tests"
-	@echo "  run       - Run the MCP server"
-	@echo "  clean     - Clean up generated files"
-	@echo "  lint      - Run linting checks"
-	@echo "  format    - Format code with black"
-	@echo "  check     - Run all checks (lint, format, test)"
+	@echo "  setup      Create .venv and install the project with dev tools"
+	@echo "  install    Install the project in the current Python environment"
+	@echo "  test       Run the test suite"
+	@echo "  run        Run the MCP server"
+	@echo "  run-safe   Run with terminal writes disabled"
+	@echo "  health     Run the health check"
+	@echo "  clean      Remove project-generated build and cache artifacts"
+	@echo "  lint       Run Ruff lint checks"
+	@echo "  format     Format code with Ruff"
+	@echo "  check      Run lint, format check, types, tests, and package build"
 
-# Set up virtual environment and install dependencies
 setup:
-	@echo "Setting up virtual environment..."
-	python3 -m venv venv
-	@echo "Installing dependencies..."
-	. venv/bin/activate && pip install --upgrade pip
-	. venv/bin/activate && pip install -r requirements.txt
-	@echo "Setup complete! Activate with: source venv/bin/activate"
+	@if command -v uv >/dev/null 2>&1; then \
+		uv venv --python 3.12 $(VENV); \
+		uv pip install --python $(PYTHON) -e '.[dev]'; \
+	else \
+		command -v python3.12 >/dev/null 2>&1 || { echo "Python 3.12 or uv is required"; exit 1; }; \
+		python3.12 -m venv $(VENV); \
+		$(PYTHON) -m pip install -e '.[dev]'; \
+	fi
+	@echo "Setup complete. Use $(PYTHON) or tools in $(VENV)/bin directly."
 
-# Install dependencies in current environment
 install:
-	pip install -r requirements.txt
+	python3 -m pip install .
 
-# Run tests
 test:
-	@echo "Running tests..."
-	python -m pytest tests/ -v --tb=short
+	$(VENV)/bin/pytest
 
-# Run the MCP server
 run:
-	@echo "Starting MCP server..."
-	python terminal_mcp_server.py
+	$(PYTHON) -m terminal_mcp
 
-# Run the MCP server in readonly mode (recommended)
 run-safe:
-	@echo "Starting MCP server in readonly mode (recommended)..."
-	MCP_TERMINAL_READONLY=1 python terminal_mcp_server.py
+	MCP_TERMINAL_READONLY=1 $(PYTHON) -m terminal_mcp
 
-# Run health check
 health:
-	@echo "Running health check..."
-	python health_check.py
+	$(PYTHON) health_check.py
 
-# Clean up generated files
 clean:
-	@echo "Cleaning up..."
-	find . -type f -name "*.pyc" -delete
-	find . -type d -name "__pycache__" -delete
-	find . -type d -name "*.egg-info" -exec rm -rf {} +
-	find . -type d -name ".pytest_cache" -exec rm -rf {} +
-	find . -type d -name ".mypy_cache" -exec rm -rf {} +
-	rm -rf build/
-	rm -rf dist/
-	rm -rf .coverage
-	rm -rf htmlcov/
-	@echo "Cleanup complete!"
+	rm -rf build dist htmlcov .coverage .pytest_cache .mypy_cache .ruff_cache
+	rm -rf terminal_mcp_server.egg-info terminal_mcp/__pycache__ terminal_mcp/backends/__pycache__ tests/__pycache__ tests/contract/__pycache__ tests/unit/__pycache__
 
-# Run linting checks
 lint:
-	@echo "Running linting checks..."
-	flake8 --max-line-length=88 terminal_mcp_server.py health_check.py tests/
-	pylint terminal_mcp_server.py health_check.py tests/
+	$(VENV)/bin/ruff check .
 
-# Format code with black
 format:
-	@echo "Formatting code..."
-	black .
+	$(VENV)/bin/ruff format .
 
-# Run all checks
-check: lint format test
-	@echo "All checks passed!"
+check:
+	$(VENV)/bin/ruff check .
+	$(VENV)/bin/ruff format --check .
+	$(VENV)/bin/mypy terminal_mcp tests
+	$(VENV)/bin/pytest -m "not smoke"
+	$(PYTHON) -m build --no-isolation
 
-# Development setup with additional tools
 dev-setup: setup
-	@echo "Installing development dependencies..."
-	. venv/bin/activate && pip install black flake8 pylint pytest
-	@echo "Development setup complete!" 

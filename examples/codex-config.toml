@@ -1,0 +1,7 @@
+[mcp_servers.terminal]
+command = "/absolute/path/to/mcp-terminal/.venv/bin/terminal-mcp-server"
+startup_timeout_sec = 10
+tool_timeout_sec = 30
+
+[mcp_servers.terminal.env]
+MCP_TERMINAL_ENV_FILE = "/absolute/path/to/mcp-terminal/.env"
