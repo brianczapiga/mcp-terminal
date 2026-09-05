@@ -2,6 +2,9 @@
 
 set -eu
 
+SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+cd "$SCRIPT_DIR"
+
 echo "Installing Terminal MCP Server..."
 
 if ! command -v python3 >/dev/null 2>&1; then
