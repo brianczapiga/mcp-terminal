@@ -2,10 +2,23 @@ from __future__ import annotations
 
 import pytest
 
+import terminal_mcp.backends as backends
 from terminal_mcp.backends.detect import detect_backend
 from terminal_mcp.backends.iterm2 import ITerm2Backend
 from terminal_mcp.backends.macos_terminal import MacOSTerminalBackend
 from terminal_mcp.errors import ApplicationUnavailable, AutomationDenied
+
+
+def test_backend_package_exports_complete_public_surface() -> None:
+    assert backends.__all__ == [
+        "AppleScriptRunner",
+        "ITerm2Backend",
+        "MacOSTerminalBackend",
+        "TerminalBackend",
+        "detect_backend",
+    ]
+    assert backends.AppleScriptRunner is not None
+    assert backends.TerminalBackend is not None
 
 
 class SequenceRunner:
