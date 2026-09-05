@@ -203,7 +203,9 @@ def _bool(name: str, default: bool) -> bool:
 
 
 def _csv(name: str) -> frozenset[str]:
-    return frozenset(value.strip() for value in os.getenv(name, "").split(",") if value.strip())
+    return frozenset(
+        value.strip() for value in os.getenv(name, "").split(",") if value.strip()
+    )
 
 
 def _tty(value: str) -> str:
@@ -222,12 +224,16 @@ class Settings:
     @classmethod
     def load(cls, dotenv_path: Path | None = None) -> "Settings":
         configured_path = os.getenv("MCP_TERMINAL_ENV_FILE")
-        selected_path = dotenv_path or (Path(configured_path) if configured_path else Path.cwd() / ".env")
+        selected_path = dotenv_path or (
+            Path(configured_path) if configured_path else Path.cwd() / ".env"
+        )
         load_dotenv(dotenv_path=selected_path, override=False)
         level_name = os.getenv("MCP_TERMINAL_LOG_LEVEL", "INFO").upper()
         return cls(
             readonly=_bool("MCP_TERMINAL_READONLY", True),
-            excluded_ttys=frozenset(_tty(value) for value in _csv("MCP_TERMINAL_EXCLUDED_TTYS")),
+            excluded_ttys=frozenset(
+                _tty(value) for value in _csv("MCP_TERMINAL_EXCLUDED_TTYS")
+            ),
             excluded_sessions=_csv("MCP_TERMINAL_EXCLUDED_SESSIONS"),
             detect_self_session=_bool("MCP_TERMINAL_DETECT_SELF_SESSION", True),
             allow_self_target=_bool("MCP_TERMINAL_ALLOW_SELF_TARGET", False),
@@ -279,7 +285,10 @@ def test_runner_returns_text():
 
 @pytest.mark.parametrize(
     ("stderr", "error_type"),
-    [("Not authorized to send Apple events", AutomationDenied), ("syntax error", ScriptFailed)],
+    [
+        ("Not authorized to send Apple events", AutomationDenied),
+        ("syntax error", ScriptFailed),
+    ],
 )
 def test_runner_classifies_failures(stderr, error_type):
     completed = Mock(returncode=1, stdout="", stderr=stderr)
@@ -288,7 +297,10 @@ def test_runner_classifies_failures(stderr, error_type):
 
 
 def test_runner_classifies_timeout():
-    with patch("subprocess.run", side_effect=TimeoutError), pytest.raises(ScriptTimedOut):
+    with (
+        patch("subprocess.run", side_effect=TimeoutError),
+        pytest.raises(ScriptTimedOut),
+    ):
         AppleScriptRunner().run("slow script")
 ```
 
@@ -387,7 +399,12 @@ a fake `1_1` session. Keep all escaping in a shared helper:
 
 ```python
 def applescript_string(value: str) -> str:
-    return value.replace("\\", "\\\\").replace('"', '\\"').replace("\r", "\\r").replace("\n", "\\n")
+    return (
+        value.replace("\\", "\\\\")
+        .replace('"', '\\"')
+        .replace("\r", "\\r")
+        .replace("\n", "\\n")
+    )
 ```
 
 Construct `SessionInfo` with `time.time()` supplied through an injectable clock.
@@ -417,7 +434,10 @@ git commit -m "refactor: isolate macOS terminal backends"
 
 ```python
 def test_list_sessions_excludes_configured_tty(manager, backend):
-    backend.list_sessions.return_value = [session("a", "/dev/ttys001"), session("b", "/dev/ttys002")]
+    backend.list_sessions.return_value = [
+        session("a", "/dev/ttys001"),
+        session("b", "/dev/ttys002"),
+    ]
     manager.excluded_ttys = frozenset({"/dev/ttys001"})
     assert [item.session_id for item in manager.list_sessions()] == ["b"]
 
@@ -494,23 +514,35 @@ async def test_tool_schemas_have_no_legacy_request(fake_server):
     async with Client(fake_server) as client:
         tools = await client.list_tools()
     assert {tool.name for tool in tools} >= {
-        "list_sessions", "set_active_session", "get_screen", "get_all_terminal_info",
-        "send_input", "send_keypress", "paste_text", "scroll_back",
+        "list_sessions",
+        "set_active_session",
+        "get_screen",
+        "get_all_terminal_info",
+        "send_input",
+        "send_keypress",
+        "paste_text",
+        "scroll_back",
     }
-    assert all("request" not in tool.inputSchema.get("properties", {}) for tool in tools)
+    assert all(
+        "request" not in tool.inputSchema.get("properties", {}) for tool in tools
+    )
 
 
 @pytest.mark.asyncio
 async def test_send_input_returns_structured_success(fake_server):
     async with Client(fake_server) as client:
-        result = await client.call_tool("send_input", {"session_id": "a", "text": "pwd"})
+        result = await client.call_tool(
+            "send_input", {"session_id": "a", "text": "pwd"}
+        )
     assert result.structured_content == {"success": True, "session_id": "a"}
 
 
 @pytest.mark.asyncio
 async def test_readonly_write_is_a_tool_error(readonly_server):
     async with Client(readonly_server) as client:
-        result = await client.call_tool("send_input", {"session_id": "a", "text": "pwd"})
+        result = await client.call_tool(
+            "send_input", {"session_id": "a", "text": "pwd"}
+        )
     assert result.is_error
     assert "disabled" in result.content[0].text.lower()
 ```
@@ -573,7 +605,10 @@ git commit -m "feat: publish modern MCP tool contract"
 
 ```python
 def test_wheel_contains_server_module(tmp_path):
-    subprocess.run([sys.executable, "-m", "build", "--wheel", "--outdir", str(tmp_path)], check=True)
+    subprocess.run(
+        [sys.executable, "-m", "build", "--wheel", "--outdir", str(tmp_path)],
+        check=True,
+    )
     wheel = next(tmp_path.glob("*.whl"))
     with zipfile.ZipFile(wheel) as archive:
         names = set(archive.namelist())
