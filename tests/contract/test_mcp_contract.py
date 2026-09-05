@@ -1,13 +1,20 @@
 from __future__ import annotations
 
+import subprocess
 from collections.abc import Sequence
 from typing import Any, cast
 
 import pytest
 from fastmcp import Client
 
+from terminal_mcp.backends.base import AppleScriptRunner
 from terminal_mcp.config import Settings
-from terminal_mcp.errors import AutomationDenied, ScriptFailed
+from terminal_mcp.errors import (
+    ApplicationUnavailable,
+    AutomationDenied,
+    ScriptFailed,
+    ScriptTimedOut,
+)
 from terminal_mcp.manager import TerminalManager
 from terminal_mcp.models import SessionInfo
 
@@ -250,6 +257,140 @@ async def test_domain_details_do_not_reach_protocol_or_logs(
     async with Client(server) as client:
         result = await client.call_tool("get_screen", raise_on_error=False)
     assert result.is_error and "SECRET" not in repr(result.content) + caplog.text
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "stderr, settings_pane",
+    [
+        ("osascript is not allowed to send keystrokes. (1002)", "Accessibility"),
+        ("osascript is not allowed assistive access. (-1719)", "Accessibility"),
+        ("Not authorized to send Apple events to Terminal. (-1743)", "Automation"),
+    ],
+)
+async def test_permission_errors_include_recovery_steps_over_mcp(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+    stderr: str,
+    settings_pane: str,
+) -> None:
+    server, backend, _ = setup(readonly=False)
+    monkeypatch.setattr(
+        subprocess,
+        "run",
+        lambda *args, **kwargs: subprocess.CompletedProcess(
+            args=["osascript"], returncode=1, stdout="SECRET", stderr=stderr + " SECRET"
+        ),
+    )
+
+    def send_keypress(target: SessionInfo, key: str, modifiers: Sequence[str]) -> None:
+        AppleScriptRunner().run("test")
+
+    backend.send_keypress = send_keypress  # type: ignore[method-assign]
+    async with Client(server) as client:
+        result = await client.call_tool(
+            "send_keypress", {"key": "up"}, raise_on_error=False
+        )
+    assert result.is_error
+    message = " ".join(item.text for item in result.content if item.type == "text")
+    assert f"System Settings > Privacy & Security > {settings_pane}" in message
+    assert "MCP client" in message
+    assert "restart" in message.lower()
+    assert "retry" in message.lower()
+    assert "SECRET" not in message + caplog.text
+
+
+@pytest.mark.asyncio
+async def test_readonly_error_explains_configuration_and_restart() -> None:
+    server, _, _ = setup()
+    async with Client(server) as client:
+        result = await client.call_tool(
+            "send_keypress", {"key": "up"}, raise_on_error=False
+        )
+    assert result.is_error
+    message = " ".join(item.text for item in result.content if item.type == "text")
+    assert "MCP_TERMINAL_READONLY=0" in message
+    assert "MCP_TERMINAL_ENV_FILE" in message
+    assert "restart" in message.lower()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "failure",
+    [
+        ApplicationUnavailable("missing"),
+        AutomationDenied("denied"),
+        ScriptTimedOut("slow"),
+    ],
+)
+async def test_runtime_exposes_tools_and_recovers_after_detection_failure(
+    monkeypatch: pytest.MonkeyPatch, failure: Exception
+) -> None:
+    import terminal_mcp.server as module
+
+    attempts = 0
+    backend = Backend()
+    servers: list[Any] = []
+
+    def detect(runner: Any) -> Backend:
+        nonlocal attempts
+        attempts += 1
+        if attempts == 1:
+            raise failure
+        return backend
+
+    monkeypatch.setattr(module.Settings, "load", lambda: settings(readonly=False))
+    monkeypatch.setattr(module.logging, "basicConfig", lambda **kwargs: None)
+    monkeypatch.setattr(module, "detect_backend", detect)
+    monkeypatch.setattr(
+        module.FastMCP, "run", lambda self, transport: servers.append(self)
+    )
+    module.main()
+    assert attempts == 0
+    async with Client(servers[0]) as client:
+        assert {tool.name for tool in await client.list_tools()} == TOOLS
+        assert len(await client.list_prompts()) == 4
+        assert attempts == 0
+        failed = await client.call_tool("list_sessions", raise_on_error=False)
+        assert failed.is_error
+        assert attempts == 1
+        recovered = await client.call_tool("list_sessions")
+        assert recovered.structured_content["total"] == 2
+        screen = await client.call_tool("get_screen")
+        assert screen.structured_content["content"].startswith("output:")
+        await client.call_tool("send_keypress", {"key": "up"})
+        assert attempts == 2
+    assert len([call for call in backend.calls if call[0] == "key"]) == 1
+
+
+@pytest.mark.asyncio
+async def test_lazy_runtime_does_not_retry_a_timed_out_write(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from terminal_mcp.backends.lazy import LazyTerminalBackend
+    from terminal_mcp.server import create_server
+
+    backend = Backend()
+    writes = 0
+
+    def send_text(target: SessionInfo, text: str, execute: bool) -> None:
+        nonlocal writes
+        writes += 1
+        raise ScriptTimedOut("write may have happened")
+
+    monkeypatch.setattr(backend, "send_text", send_text)
+    server = create_server(
+        TerminalManager(LazyTerminalBackend(lambda: backend), settings(readonly=False))
+    )
+    async with Client(server) as client:
+        result = await client.call_tool(
+            "send_input", {"text": "echo test"}, raise_on_error=False
+        )
+        assert result.is_error
+        assert writes == 1
+        screen = await client.call_tool("get_screen")
+        assert screen.structured_content["content"].startswith("output:")
+        assert writes == 1
 
 
 @pytest.mark.asyncio

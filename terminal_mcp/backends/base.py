@@ -7,6 +7,7 @@ from collections.abc import Sequence
 from typing import Protocol, runtime_checkable
 
 from terminal_mcp.errors import (
+    AccessibilityDenied,
     ApplicationUnavailable,
     AutomationDenied,
     ScriptFailed,
@@ -31,7 +32,8 @@ def applescript_string(value: str) -> str:
 class TerminalBackend(Protocol):
     """Operations implemented by a supported terminal application."""
 
-    name: str
+    @property
+    def name(self) -> str: ...
 
     def list_sessions(self) -> list[SessionInfo]: ...
 
@@ -76,6 +78,8 @@ class AppleScriptRunner:
             raise ApplicationUnavailable("osascript could not be started") from None
 
         if result.returncode != 0:
+            if self._is_accessibility_denial(result.stderr):
+                raise AccessibilityDenied("macOS Accessibility permission was denied")
             if self._is_automation_denial(result.stderr):
                 raise AutomationDenied(
                     "Automation permission was denied; allow terminal automation "
@@ -88,6 +92,18 @@ class AppleScriptRunner:
             raise ScriptFailed("AppleScript execution failed")
 
         return result.stdout.removesuffix("\n")
+
+    @staticmethod
+    def _is_accessibility_denial(stderr: str) -> bool:
+        normalized = stderr.casefold()
+        # Match permission-specific text: numeric AppleScript error codes alone
+        # can also describe unrelated failures.
+        indicators = (
+            "not allowed to send keystrokes",
+            "not allowed assistive access",
+            "not allowed to access assistive devices",
+        )
+        return any(indicator in normalized for indicator in indicators)
 
     @staticmethod
     def _is_automation_denial(stderr: str) -> bool:

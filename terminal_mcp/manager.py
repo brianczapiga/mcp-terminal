@@ -91,10 +91,14 @@ class TerminalManager:
         self._buffer_size = max(1, buffer_size)
         self._lock = threading.RLock()
         self._excluded_ttys = set(settings.excluded_ttys)
-        if settings.detect_self_session:
+        self._self_session_checked = not settings.detect_self_session
+
+    def _check_self_session(self) -> None:
+        if not self._self_session_checked:
             detected_tty = detect_controlling_tty()
             if detected_tty is not None:
                 self._excluded_ttys.add(detected_tty)
+            self._self_session_checked = True
 
     def _is_excluded(self, session: SessionInfo) -> bool:
         return session.session_id in self.settings.excluded_sessions or (
@@ -104,6 +108,7 @@ class TerminalManager:
 
     def list_sessions(self, force: bool = False) -> list[SessionInfo]:
         with self._lock:
+            self._check_self_session()
             now = self.clock()
             if (
                 force

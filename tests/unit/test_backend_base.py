@@ -8,6 +8,7 @@ import pytest
 
 from terminal_mcp.backends.base import AppleScriptRunner
 from terminal_mcp.errors import (
+    AccessibilityDenied,
     ApplicationUnavailable,
     AutomationDenied,
     ScriptFailed,
@@ -55,6 +56,11 @@ def test_run_passes_configured_timeout_and_text_mode(
     [
         ("Not authorized to send Apple events to Terminal.", AutomationDenied),
         ("Automation permission denied", AutomationDenied),
+        ("osascript is not allowed to send keystrokes. (1002)", AccessibilityDenied),
+        ("osascript is not allowed assistive access. (-1719)", AccessibilityDenied),
+        ("Not allowed to access assistive devices", AccessibilityDenied),
+        ("unrelated operation failed (1002)", ScriptFailed),
+        ("invalid index (-1719)", ScriptFailed),
         ("execution error: unavailable (-2701)", UnknownSession),
         ("unexpected AppleScript failure", ScriptFailed),
         ("filesystem permission denied", ScriptFailed),

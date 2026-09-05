@@ -7,10 +7,8 @@ import time
 from collections.abc import Callable, Sequence
 
 from terminal_mcp.backends.base import AppleScriptExecutor, applescript_string
-from terminal_mcp.backends.macos_terminal import _MODIFIERS, _parse_sessions
+from terminal_mcp.backends.macos_terminal import _KEY_CODES, _MODIFIERS, _parse_sessions
 from terminal_mcp.models import SessionInfo
-
-_KEY_CODES = {"return": 36, "tab": 48, "escape": 53, "delete": 51}
 
 
 class ITerm2Backend:

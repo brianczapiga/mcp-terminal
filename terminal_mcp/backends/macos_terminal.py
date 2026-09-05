@@ -11,7 +11,16 @@ from terminal_mcp.errors import MalformedResponse, UnknownSession
 from terminal_mcp.models import SessionInfo
 
 _MODIFIERS = {"command", "control", "option", "shift"}
-_KEY_CODES = {"return": 36, "tab": 48, "escape": 53, "delete": 51}
+_KEY_CODES = {
+    "return": 36,
+    "tab": 48,
+    "escape": 53,
+    "delete": 51,
+    "left": 123,
+    "right": 124,
+    "down": 125,
+    "up": 126,
+}
 
 
 def _parse_sessions(output: str, observed_at: float) -> list[SessionInfo]:
@@ -122,8 +131,11 @@ return outputRecords as text
     def read_screen(self, session: SessionInfo, lines: int) -> str:
         if lines <= 0:
             return ""
+        # `contents` on the resolver's list reference dereferences the tab rather
+        # than reading its screen. Fetch the application's property explicitly.
         output = self._runner.run(
-            self._target(session) + "return contents of targetTab\nend tell"
+            self._target(session)
+            + "return contents of (get properties of targetTab)\nend tell"
         )
         return "\n".join(output.split("\n")[-lines:])
 

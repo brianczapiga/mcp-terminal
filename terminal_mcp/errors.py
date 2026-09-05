@@ -13,6 +13,10 @@ class AutomationDenied(TerminalMcpError):
     """macOS denied the requested automation operation."""
 
 
+class AccessibilityDenied(TerminalMcpError):
+    """macOS denied assistive access needed for GUI input."""
+
+
 class ScriptTimedOut(TerminalMcpError):
     """An automation script exceeded its execution deadline."""
 

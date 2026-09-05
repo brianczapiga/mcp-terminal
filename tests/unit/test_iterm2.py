@@ -65,3 +65,18 @@ def test_writes_resolve_one_exact_session(operation: str, action: str) -> None:
     assert all(marker in script for marker in markers)
     assert action in script
     assert "current session" not in script and "front session" not in script
+
+
+@pytest.mark.parametrize(
+    "key, code", [("left", 123), ("right", 124), ("down", 125), ("up", 126)]
+)
+@pytest.mark.parametrize("modifiers", [[], ["shift"]])
+def test_arrow_keys_emit_native_key_events(
+    key: str, code: int, modifiers: list[str]
+) -> None:
+    runner = RecordingRunner()
+    ITerm2Backend(runner).send_keypress(session(), key, modifiers)
+    suffix = " using {shift down}" if modifiers else ""
+    assert runner.scripts[0].splitlines()[-1] == (
+        f'tell application "System Events" to key code {code}{suffix}'
+    )

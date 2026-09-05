@@ -13,8 +13,10 @@ from pydantic import Field
 
 from terminal_mcp.backends.base import AppleScriptRunner
 from terminal_mcp.backends.detect import detect_backend
+from terminal_mcp.backends.lazy import LazyTerminalBackend
 from terminal_mcp.config import Settings
 from terminal_mcp.errors import (
+    AccessibilityDenied,
     ApplicationUnavailable,
     AutomationDenied,
     ExcludedSession,
@@ -45,14 +47,40 @@ MAX_AGGREGATE_SESSIONS = 20
 MAX_AGGREGATE_CHARACTERS = 200_000
 logger = logging.getLogger(__name__)
 ERROR_MESSAGES = {
-    ApplicationUnavailable: "No supported terminal application is available.",
-    AutomationDenied: "Terminal automation permission is required.",
+    ApplicationUnavailable: (
+        "No supported terminal application is accessible. Open Terminal.app or "
+        "iTerm2 and retry the tool call. If neither can be detected, check that "
+        "the server is running on macOS with osascript available. Failed detection "
+        "is retried on the next call; restarting the MCP server is not required."
+    ),
+    AccessibilityDenied: (
+        "macOS blocked terminal keyboard input because Accessibility permission "
+        "is missing. Ask the user to open System Settings > Privacy & Security > "
+        "Accessibility and enable the app launching this MCP server (the MCP "
+        "client, such as Codex or Claude Desktop, or its terminal host). Use the "
+        "app identified by macOS; the server cannot determine that app reliably. "
+        "After granting access, fully quit and restart that app, then retry the "
+        "requested operation. Restarting alone does not grant permission."
+    ),
+    AutomationDenied: (
+        "macOS denied Automation permission. Ask the user to open System Settings "
+        "> Privacy & Security > Automation and allow the app launching this MCP "
+        "server (the MCP client or its terminal host) to control Terminal/iTerm2 "
+        "and System Events as requested by macOS. After granting access, restart "
+        "that app and retry. Keyboard input may separately require Accessibility."
+    ),
     ExcludedSession: "The requested terminal session is excluded by policy.",
     MalformedResponse: "The terminal returned an unreadable response.",
     ScriptFailed: "The terminal automation operation failed.",
     ScriptTimedOut: "The terminal automation operation timed out.",
     UnknownSession: "The requested terminal session is unavailable.",
-    WriteDisabled: "Terminal writes are disabled by policy.",
+    WriteDisabled: (
+        "Terminal writes are disabled by policy. If the user wants to enable "
+        "writes, set MCP_TERMINAL_READONLY=0 in the .env selected by "
+        "MCP_TERMINAL_ENV_FILE (or the server working directory's .env if unset). "
+        "Process environment values override .env, so check the MCP client's "
+        "server environment too. Then restart the MCP server/client and retry."
+    ),
 }
 
 
@@ -91,7 +119,16 @@ def create_server(manager: TerminalManager) -> FastMCP:
     """Create an in-memory server around an already configured manager."""
     server = FastMCP(
         "Terminal MCP",
-        instructions="Inspect terminal sessions safely and perform explicit writes.",
+        instructions=(
+            "Inspect terminal sessions safely and perform explicit writes. "
+            "When a tool reports a permission or read-only policy error, explain "
+            "its recovery steps to the user and wait for the required change "
+            "before retrying. macOS Automation and Accessibility are separate "
+            "permissions; do not assume a successful read permits keyboard input. "
+            "Do not treat generic failures or timeouts as proof of missing "
+            "permissions. After a write times out, inspect the terminal before "
+            "retrying because the write may have occurred."
+        ),
         strict_input_validation=True,
     )
 
@@ -185,7 +222,13 @@ def create_server(manager: TerminalManager) -> FastMCP:
 
         return _tool_errors(operation)
 
-    @server.tool(description="Send a keypress to a terminal; writes terminal state.")
+    @server.tool(
+        description=(
+            "Send a keypress to a terminal; writes terminal state. "
+            "Use one character or return, tab, escape, delete, up, down, left, right. "
+            "Optional modifiers: command, control, option, shift."
+        )
+    )
     def send_keypress(
         key: str,
         modifiers: list[str] | None = None,
@@ -280,7 +323,7 @@ def main() -> None:
         force=True,
     )
     runner = AppleScriptRunner()
-    backend = detect_backend(runner)
+    backend = LazyTerminalBackend(lambda: detect_backend(runner))
     manager = TerminalManager(backend, settings)
     create_server(manager).run("stdio")
 

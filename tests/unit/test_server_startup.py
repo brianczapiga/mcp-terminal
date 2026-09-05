@@ -50,9 +50,12 @@ def test_main_builds_stdio_runtime_in_order(monkeypatch: pytest.MonkeyPatch) -> 
     monkeypatch.setattr(
         module, "detect_backend", lambda runner: record(("detect", runner), backend)
     )
-    monkeypatch.setattr(
-        module, "TerminalManager", lambda b, s: record(("manager", b, s), manager)
-    )
+
+    def make_manager(b: object, s: Settings) -> object:
+        events.append(("manager", s))
+        return manager
+
+    monkeypatch.setattr(module, "TerminalManager", make_manager)
 
     class Server:
         def run(self, transport: str) -> None:
@@ -65,8 +68,18 @@ def test_main_builds_stdio_runtime_in_order(monkeypatch: pytest.MonkeyPatch) -> 
     assert events[0] == "settings" and events[1][1]["stream"] is module.sys.stderr
     assert events[2:] == [
         "runner",
-        ("detect", "runner"),
-        ("manager", backend, config),
+        ("manager", config),
         ("create", manager),
         ("run", "stdio"),
     ]
+
+
+def test_manager_creation_does_not_probe_self_tty(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "terminal_mcp.manager.detect_controlling_tty",
+        lambda: pytest.fail("self TTY must not be probed before a tool call"),
+    )
+    config = Settings(True, frozenset(), frozenset(), True, False, 20)
+    TerminalManager(object(), config)  # type: ignore[arg-type]

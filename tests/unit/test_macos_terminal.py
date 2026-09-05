@@ -130,3 +130,18 @@ def test_paste_uses_direct_write_without_clipboard() -> None:
     assert "keystroke" in script
     assert "clipboard" not in script.casefold()
     assert applescript_string("secret text") in script
+
+
+@pytest.mark.parametrize(
+    "key, code", [("left", 123), ("right", 124), ("down", 125), ("up", 126)]
+)
+@pytest.mark.parametrize("modifiers", [[], ["shift"]])
+def test_arrow_keys_emit_native_key_events(
+    key: str, code: int, modifiers: list[str]
+) -> None:
+    runner = RecordingRunner()
+    MacOSTerminalBackend(runner).send_keypress(session(), key, modifiers)
+    suffix = " using {shift down}" if modifiers else ""
+    assert runner.scripts[0].splitlines()[-1] == (
+        f'tell application "System Events" to key code {code}{suffix}'
+    )
