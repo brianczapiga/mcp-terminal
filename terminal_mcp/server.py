@@ -80,6 +80,8 @@ def _tool_errors(operation: Callable[[], T]) -> T:
         logger.warning("Terminal operation failed: %s", type(error).__name__)
         message = ERROR_MESSAGES.get(type(error), "The terminal operation failed.")
         raise ToolError(message) from None
+    except ToolError:
+        raise
     except Exception as error:
         logger.error("Unexpected terminal operation failure: %s", type(error).__name__)
         raise ToolError("The terminal operation failed unexpectedly.") from None
@@ -155,11 +157,11 @@ def create_server(manager: TerminalManager) -> FastMCP:
                 lines, MAX_AGGREGATE_SESSIONS, MAX_AGGREGATE_CHARACTERS
             )
             sessions = [item.session for item in snapshot.sessions]
-            default_id = manager.active_session_id or snapshot.default_session_id
+            default_id = snapshot.default_session_id
             details = [
                 _session_data(
                     item.session,
-                    manager.active_session_id,
+                    snapshot.active_session_id,
                     item.content,
                     item.content_truncated,
                 )

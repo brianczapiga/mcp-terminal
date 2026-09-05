@@ -252,13 +252,15 @@ def test_snapshot_reads_do_not_rescan_when_cache_expires() -> None:
 def test_capture_snapshot_bounds_sessions_and_characters() -> None:
     backend = Backend([[session("c"), session("a"), session("b")]])
     manager = TerminalManager(backend, settings())
+    manager.set_active_session("c")
     snapshot = manager.capture_snapshot(7, max_sessions=2, max_characters=9)
     assert [(item.session.session_id, item.content) for item in snapshot.sessions] == [
         ("a", "a:7:1"),
-        ("b", "b:7:"),
+        ("c", "c:7:"),
     ]
     assert snapshot.sessions[1].content_truncated
-    assert snapshot.omitted_session_ids == ("c",)
+    assert snapshot.omitted_session_ids == ("b",)
+    assert snapshot.active_session_id == snapshot.default_session_id == "c"
     assert snapshot.truncated and backend.scan_count == 1
 
 

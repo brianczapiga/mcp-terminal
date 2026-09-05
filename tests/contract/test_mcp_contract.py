@@ -119,6 +119,9 @@ async def test_discovery_and_schema_contract() -> None:
 async def test_reads_selection_and_structured_shapes() -> None:
     server, _, _ = setup()
     async with Client(server) as client:
+        no_active = await client.call_tool(
+            "get_screen", {"mode": "manual"}, raise_on_error=False
+        )
         listed = await client.call_tool("list_sessions")
         recent = await client.call_tool(
             "get_screen", {"lines": 12, "mode": "recent-output"}
@@ -127,6 +130,8 @@ async def test_reads_selection_and_structured_shapes() -> None:
         focus = await client.call_tool("get_screen", {"mode": "focus"})
         manual = await client.call_tool("get_screen", {"mode": "manual"})
     sessions = listed.structured_content["sessions"]
+    assert "active terminal session" in no_active.content[0].text
+    assert "unexpected" not in no_active.content[0].text.casefold()
     assert [item["session_id"] for item in sessions] == ["older", "newer"]
     assert {"session_id", "name", "tty", "busy", "active"} <= set(sessions[0])
     assert active.structured_content == {"success": True, "session_id": "older"}
@@ -164,6 +169,21 @@ async def test_all_info_is_one_scan_and_excludes_hidden_even_after_cache_expiry(
         "output:older:8",
     ]
     assert "hidden" not in repr(data)
+
+
+@pytest.mark.asyncio
+async def test_all_info_uses_only_captured_active_metadata() -> None:
+    server, _, manager = setup()
+    manager.set_active_session("older")
+    snapshot = manager.capture_snapshot(8, 20, 200_000)
+    manager.set_active_session("newer")
+    manager.capture_snapshot = lambda *args: snapshot  # type: ignore[method-assign]
+    async with Client(server) as client:
+        data = (await client.call_tool("get_all_terminal_info")).structured_content
+    assert data["default_session_id"] == "older"
+    assert [item["session_id"] for item in data["sessions"] if item["active"]] == [
+        "older"
+    ]
 
 
 @pytest.mark.asyncio

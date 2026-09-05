@@ -181,8 +181,19 @@ class TerminalManager:
         """Discover and capture a bounded, coherent set of eligible sessions."""
         with self._lock:
             sessions = sorted(self.list_sessions(), key=lambda item: item.session_id)
-            selected = sessions[: max(0, max_sessions)]
-            omitted = tuple(item.session_id for item in sessions[len(selected) :])
+            limit = max(0, max_sessions)
+            selected = sessions[:limit]
+            active_id = self.active_session_id
+            active = self.sessions.get(active_id) if active_id is not None else None
+            if active is not None and limit and active not in selected:
+                selected[-1] = active
+                selected.sort(key=lambda item: item.session_id)
+            selected_ids = {item.session_id for item in selected}
+            omitted = tuple(
+                item.session_id
+                for item in sessions
+                if item.session_id not in selected_ids
+            )
             remaining = max(0, max_characters)
             captured = []
             content_was_truncated = False
@@ -197,11 +208,14 @@ class TerminalManager:
                 tuple(captured),
                 omitted,
                 bool(omitted) or content_was_truncated,
+                active_id if active_id in selected_ids else None,
                 (
-                    min(
-                        sessions, key=lambda item: (-item.observed_at, item.session_id)
+                    active_id
+                    if active_id in selected_ids
+                    else min(
+                        selected, key=lambda item: (-item.observed_at, item.session_id)
                     ).session_id
-                    if sessions
+                    if selected
                     else None
                 ),
                 len(sessions),

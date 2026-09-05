@@ -31,6 +31,7 @@ class TerminalSnapshot:
     sessions: tuple[CapturedSession, ...]
     omitted_session_ids: tuple[str, ...]
     truncated: bool
+    active_session_id: str | None
     default_session_id: str | None
     total: int
 
