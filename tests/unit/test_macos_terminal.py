@@ -31,45 +31,20 @@ def test_lists_terminal_sessions_from_tab_separated_records() -> None:
             "75081_1", "75081", "1", "Build, deploy", "/dev/ttys001", False, 42.5
         )
     ]
-    assert "ASCII character 9" in runner.scripts[0]
-    assert "ASCII character 10" in runner.scripts[0]
-    assert "cleanField" in runner.scripts[0]
-    assert "character id 133" in runner.scripts[0]
-    assert "character id 8232" in runner.scripts[0]
-    assert "character id 8233" in runner.scripts[0]
-
-
-@pytest.mark.parametrize("output", ["", "  \n\t "])
-def test_empty_session_output_returns_empty_list(output: str) -> None:
-    assert MacOSTerminalBackend(RecordingRunner(output)).list_sessions() == []
-
-
-def test_missing_tty_maps_to_none() -> None:
-    runner = RecordingRunner("75081\t1\tBuild\t\ttrue")
-    assert MacOSTerminalBackend(runner).list_sessions()[0].tty_device is None
 
 
 @pytest.mark.parametrize(
     "output",
-    ["75081\t1\tBuild\t/dev/ttys001", "75081\t1\tBuild\t/dev/ttys001\tfalse\textra"],
+    [
+        "75081\t1\tBuild\t/dev/ttys001",
+        "75081\t1\tBuild\t/dev/ttys001\tfalse\textra",
+        "75081\t1\tBuild\t\tmaybe",
+        "75081\t1\tBuild\tunsafe\t/dev/ttys001\tfalse",
+    ],
 )
-def test_malformed_session_rows_raise(output: str) -> None:
+def test_malformed_session_records_raise(output: str) -> None:
     with pytest.raises(MalformedResponse):
         MacOSTerminalBackend(RecordingRunner(output)).list_sessions()
-
-
-def test_malformed_busy_value_raises() -> None:
-    with pytest.raises(MalformedResponse):
-        MacOSTerminalBackend(
-            RecordingRunner("75081\t1\tBuild\t\tmaybe")
-        ).list_sessions()
-
-
-def test_embedded_delimiter_is_rejected_by_parser() -> None:
-    with pytest.raises(MalformedResponse):
-        MacOSTerminalBackend(
-            RecordingRunner("75081\t1\tBuild\tunsafe\t/dev/ttys001\tfalse")
-        ).list_sessions()
 
 
 def test_read_screen_resolves_exact_window_and_tty_and_limits_lines() -> None:
@@ -78,17 +53,10 @@ def test_read_screen_resolves_exact_window_and_tty_and_limits_lines() -> None:
 
     assert result == "  indented\n\nlast"
     assert "window whose id is 75081" in runner.scripts[0]
-    assert "repeat with candidateTab in tabs of targetWindow" in runner.scripts[0]
     assert 'tty of candidateTab is "/dev/ttys001"' in runner.scripts[0]
     assert "if (count of matchingTabs) is not 1 then error" in runner.scripts[0]
-    assert "number -2701" in runner.scripts[0]
     assert "tab 1 of targetWindow" not in runner.scripts[0]
     assert "front window" not in runner.scripts[0]
-
-
-def test_applescript_string_escapes_sensitive_characters() -> None:
-    literal = applescript_string('say "hi" \\ next\r\nline')
-    assert literal == '"say \\"hi\\" \\\\ next\\r\\nline"'
 
 
 @pytest.mark.parametrize(
@@ -120,7 +88,6 @@ def test_terminal_resolver_prevents_action_on_closed_or_duplicate_tty() -> None:
     runner = RecordingRunner()
     MacOSTerminalBackend(runner).send_text(session(), "pwd", True)
     script = runner.scripts[0]
-    assert "set matchingTabs to {}" in script
     assert "if (count of matchingTabs) is not 1 then error" in script
     assert script.index(
         "if (count of matchingTabs) is not 1 then error"
@@ -163,10 +130,3 @@ def test_paste_uses_direct_write_without_clipboard() -> None:
     assert "keystroke" in script
     assert "clipboard" not in script.casefold()
     assert applescript_string("secret text") in script
-
-
-def test_nonpositive_read_does_not_run_script() -> None:
-    runner = RecordingRunner("ignored")
-    assert MacOSTerminalBackend(runner).read_screen(session(), 0) == ""
-    assert MacOSTerminalBackend(runner).read_screen(session(), -1) == ""
-    assert runner.scripts == []

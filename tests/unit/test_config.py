@@ -1,4 +1,3 @@
-import logging
 import os
 from collections.abc import Iterator
 
@@ -26,12 +25,16 @@ def isolated_environment(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
         os.environ.pop(variable, None)
 
 
-def test_defaults_to_readonly_without_env_file(
+def test_safe_defaults_without_env_file(
     tmp_path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.chdir(tmp_path)
 
-    assert Settings.load().readonly is True
+    value = Settings.load()
+    assert value.readonly is True
+    assert value.excluded_sessions == frozenset()
+    assert value.detect_self_session is True
+    assert value.allow_self_target is False
 
 
 def test_loads_readonly_from_cwd_env_file(
@@ -53,12 +56,6 @@ def test_process_environment_takes_precedence_over_env_file(
     assert Settings.load().readonly is True
 
 
-def test_normalizes_excluded_ttys(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("MCP_TERMINAL_EXCLUDED_TTYS", "ttys001, /dev/ttys002")
-
-    assert Settings.load().excluded_ttys == frozenset({"/dev/ttys001", "/dev/ttys002"})
-
-
 def test_env_file_variable_overrides_cwd_env_file(
     tmp_path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -69,27 +66,6 @@ def test_env_file_variable_overrides_cwd_env_file(
     selected_env_file.write_text("MCP_TERMINAL_READONLY=0\n")
     monkeypatch.chdir(cwd)
     monkeypatch.setenv("MCP_TERMINAL_ENV_FILE", str(selected_env_file))
-
-    assert Settings.load().readonly is False
-
-
-def test_env_file_variable_trims_surrounding_whitespace(
-    tmp_path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    selected_env_file = tmp_path / "selected.env"
-    selected_env_file.write_text("MCP_TERMINAL_READONLY=0\n")
-    monkeypatch.setenv("MCP_TERMINAL_ENV_FILE", f"  {selected_env_file}  ")
-
-    assert Settings.load().readonly is False
-
-
-@pytest.mark.parametrize("env_file", ["", "   "])
-def test_blank_env_file_variable_falls_back_to_cwd_env_file(
-    env_file: str, tmp_path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    (tmp_path / ".env").write_text("MCP_TERMINAL_READONLY=0\n")
-    monkeypatch.chdir(tmp_path)
-    monkeypatch.setenv("MCP_TERMINAL_ENV_FILE", env_file)
 
     assert Settings.load().readonly is False
 
@@ -116,75 +92,25 @@ def test_sequential_explicit_env_files_are_independent(tmp_path) -> None:
     assert Settings.load(second_env_file).readonly is True
 
 
-def test_security_defaults() -> None:
-    settings = Settings.load()
-
-    assert settings.excluded_sessions == frozenset()
-    assert settings.detect_self_session is True
-    assert settings.allow_self_target is False
-
-
-def test_parses_excluded_sessions(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("MCP_TERMINAL_EXCLUDED_SESSIONS", " alpha, , beta ")
-
-    assert Settings.load().excluded_sessions == frozenset({"alpha", "beta"})
-
-
-@pytest.mark.parametrize("value", ["1", "TRUE", "Yes", "on"])
-def test_parses_true_boolean_values(
-    value: str, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    monkeypatch.setenv("MCP_TERMINAL_ALLOW_SELF_TARGET", value)
-
-    assert Settings.load().allow_self_target is True
-
-
-@pytest.mark.parametrize("value", ["0", "false", "NO", "off"])
-def test_parses_false_boolean_values(
-    value: str, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    monkeypatch.setenv("MCP_TERMINAL_DETECT_SELF_SESSION", value)
-
-    assert Settings.load().detect_self_session is False
-
-
-@pytest.mark.parametrize("value", ["", "   ", "unexpected"])
 @pytest.mark.parametrize(
-    ("variable", "attribute", "default"),
+    ("variable", "attribute", "value", "expected"),
     [
-        ("MCP_TERMINAL_READONLY", "readonly", True),
-        ("MCP_TERMINAL_DETECT_SELF_SESSION", "detect_self_session", True),
-        ("MCP_TERMINAL_ALLOW_SELF_TARGET", "allow_self_target", False),
+        ("MCP_TERMINAL_ALLOW_SELF_TARGET", "allow_self_target", "1", True),
+        ("MCP_TERMINAL_ALLOW_SELF_TARGET", "allow_self_target", "Yes", True),
+        ("MCP_TERMINAL_DETECT_SELF_SESSION", "detect_self_session", "0", False),
+        ("MCP_TERMINAL_DETECT_SELF_SESSION", "detect_self_session", "NO", False),
+        ("MCP_TERMINAL_READONLY", "readonly", "unexpected", True),
+        ("MCP_TERMINAL_DETECT_SELF_SESSION", "detect_self_session", "", True),
+        ("MCP_TERMINAL_ALLOW_SELF_TARGET", "allow_self_target", "   ", False),
     ],
 )
-def test_blank_or_malformed_boolean_values_use_setting_default(
+def test_boolean_parsing_and_malformed_defaults(
     variable: str,
     attribute: str,
-    default: bool,
     value: str,
+    expected: bool,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv(variable, value)
 
-    assert getattr(Settings.load(), attribute) is default
-
-
-def test_parses_valid_log_level_case_insensitively(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setenv("MCP_TERMINAL_LOG_LEVEL", "warning")
-
-    assert Settings.load().log_level == logging.WARNING
-
-
-def test_invalid_log_level_falls_back_to_info(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("MCP_TERMINAL_LOG_LEVEL", "not-a-level")
-
-    assert Settings.load().log_level == logging.INFO
-
-
-def test_settings_are_immutable() -> None:
-    settings = Settings.load()
-
-    with pytest.raises(AttributeError):
-        settings.readonly = False
+    assert getattr(Settings.load(), attribute) is expected

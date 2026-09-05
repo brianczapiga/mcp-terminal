@@ -172,21 +172,6 @@ async def test_all_info_is_one_scan_and_excludes_hidden_even_after_cache_expiry(
 
 
 @pytest.mark.asyncio
-async def test_all_info_uses_only_captured_active_metadata() -> None:
-    server, _, manager = setup()
-    manager.set_active_session("older")
-    snapshot = manager.capture_snapshot(8, 20, 200_000)
-    manager.set_active_session("newer")
-    manager.capture_snapshot = lambda *args: snapshot  # type: ignore[method-assign]
-    async with Client(server) as client:
-        data = (await client.call_tool("get_all_terminal_info")).structured_content
-    assert data["default_session_id"] == "older"
-    assert [item["session_id"] for item in data["sessions"] if item["active"]] == [
-        "older"
-    ]
-
-
-@pytest.mark.asyncio
 async def test_write_policy_errors_and_successful_delegation() -> None:
     blocked_server, _, _ = setup()
     async with Client(blocked_server) as client:

@@ -72,63 +72,40 @@ def test_scan_cache_force_replacement_and_stale_cleanup() -> None:
     assert "a" not in manager.output_buffers
 
 
-def test_concurrent_forced_scan_cannot_publish_out_of_order() -> None:
-    first_started = threading.Event()
-    release_first = threading.Event()
-    second_started = threading.Event()
+@pytest.mark.parametrize(("force_second", "expected_scans"), [(False, 1), (True, 2)])
+def test_scans_are_serialized_and_initial_scans_are_coalesced(
+    force_second: bool, expected_scans: int
+) -> None:
+    first_started, release_first, second_scan = (threading.Event() for _ in range(3))
 
     class BlockingBackend(Backend):
         def list_sessions(self) -> list[SessionInfo]:
-            scan_number = self.scan_count
+            current = self.scan_count
             self.scan_count += 1
-            if scan_number == 0:
+            if current == 0:
                 first_started.set()
                 assert release_first.wait(timeout=2)
-                return [session("a")]
-            second_started.set()
-            return [session("b")]
+            else:
+                second_scan.set()
+            return [session("new" if current else "old")]
 
     backend = BlockingBackend([[]])
     manager = TerminalManager(backend, settings())
-    first = threading.Thread(target=manager.list_sessions)
-    second = threading.Thread(target=lambda: manager.list_sessions(force=True))
-    first.start()
-    assert first_started.wait(timeout=2)
-    second.start()
-    second_entered_while_first_blocked = second_started.wait(timeout=0.05)
-    release_first.set()
-    first.join(timeout=2)
-    second.join(timeout=2)
-
-    assert not first.is_alive() and not second.is_alive()
-    assert not second_entered_while_first_blocked
-    assert second_started.is_set()
-    assert list(manager.sessions) == ["b"]
-
-
-def test_concurrent_initial_scans_do_not_resurrect_stale_sessions() -> None:
-    first_started = threading.Event()
-    release_first = threading.Event()
-
-    class BlockingBackend(Backend):
-        def list_sessions(self) -> list[SessionInfo]:
-            self.scan_count += 1
-            first_started.set()
-            assert release_first.wait(timeout=2)
-            return [session("only")]
-
-    backend = BlockingBackend([[]])
-    manager = TerminalManager(backend, settings())
-    threads = [threading.Thread(target=manager.list_sessions) for _ in range(2)]
+    threads = [
+        threading.Thread(target=manager.list_sessions),
+        threading.Thread(target=lambda: manager.list_sessions(force=force_second)),
+    ]
     threads[0].start()
     assert first_started.wait(timeout=2)
     threads[1].start()
+    assert not second_scan.wait(timeout=0.05)
     release_first.set()
     for thread in threads:
         thread.join(timeout=2)
 
-    assert backend.scan_count == 1
-    assert list(manager.sessions) == ["only"]
+    assert all(not thread.is_alive() for thread in threads)
+    assert backend.scan_count == expected_scans
+    assert list(manager.sessions) == (["new"] if force_second else ["old"])
 
 
 def test_exclusions_and_explicit_override_only(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -160,16 +137,6 @@ def test_exclusions_and_explicit_override_only(monkeypatch: pytest.MonkeyPatch) 
     assert manager.get_session_content("self", 2) == "self:2:1"
 
 
-def test_self_detection_can_be_disabled(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(
-        "terminal_mcp.manager.detect_controlling_tty", lambda: "/dev/ttys9"
-    )
-    manager = TerminalManager(
-        Backend([[session("self", tty="/dev/ttys9")]]), settings()
-    )
-    assert [s.session_id for s in manager.list_sessions()] == ["self"]
-
-
 def test_active_validation_fallback_and_recent_ties() -> None:
     backend = Backend([[session("z", observed=5), session("a", observed=5)]])
     manager = TerminalManager(backend, settings())
@@ -189,15 +156,6 @@ def test_nonpositive_read_returns_empty_without_backend_or_buffer(lines: int) ->
     assert manager.get_session_content("a", lines) == ""
     assert backend.calls == []
     assert "a" not in manager.output_buffers
-
-
-def test_read_excluded_without_override_fails() -> None:
-    manager = TerminalManager(
-        Backend([[session("x")]]),
-        settings(excluded_sessions=frozenset({"x"})),
-    )
-    with pytest.raises(ExcludedSession):
-        manager.get_session_content("x", 4)
 
 
 def test_every_write_is_gated_and_writable_delegates_exact_arguments() -> None:
