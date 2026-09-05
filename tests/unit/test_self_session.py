@@ -15,7 +15,7 @@ def result(stdout: str, returncode: int = 0) -> subprocess.CompletedProcess[str]
 def test_current_tty_and_normalization() -> None:
     calls: list[tuple[tuple[object, ...], dict[str, object]]] = []
 
-    def run(*args: object, **kwargs: object) -> subprocess.CompletedProcess[str]:
+    def run(*args: object, **kwargs: Any) -> subprocess.CompletedProcess[str]:
         calls.append((args, kwargs))
         return result("ttys003   1\n")
 
@@ -75,7 +75,7 @@ def test_parent_traversal_obeys_overall_deadline() -> None:
     now = [10.0]
     timeouts: list[float] = []
 
-    def run(*args: object, **kwargs: object) -> subprocess.CompletedProcess[str]:
+    def run(*args: object, **kwargs: Any) -> subprocess.CompletedProcess[str]:
         timeouts.append(float(kwargs["timeout"]))
         now[0] += 0.75
         return result(f"?? {100 + len(timeouts)}")

@@ -6,7 +6,7 @@ from __future__ import annotations
 import time
 from collections.abc import Callable, Sequence
 
-from terminal_mcp.backends.base import AppleScriptRunner, applescript_string
+from terminal_mcp.backends.base import AppleScriptExecutor, applescript_string
 from terminal_mcp.backends.macos_terminal import _MODIFIERS, _parse_sessions
 from terminal_mcp.models import SessionInfo
 
@@ -19,7 +19,7 @@ class ITerm2Backend:
     name = "iTerm2"
 
     def __init__(
-        self, runner: AppleScriptRunner, clock: Callable[[], float] = time.time
+        self, runner: AppleScriptExecutor, clock: Callable[[], float] = time.time
     ) -> None:
         self._runner = runner
         self._clock = clock

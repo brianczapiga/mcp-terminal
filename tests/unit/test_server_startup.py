@@ -1,5 +1,6 @@
 import importlib
 import sys
+from typing import Any
 
 import pytest
 
@@ -33,7 +34,7 @@ def test_import_and_create_are_side_effect_free(
 def test_main_builds_stdio_runtime_in_order(monkeypatch: pytest.MonkeyPatch) -> None:
     import terminal_mcp.server as module
 
-    events = []
+    events: list[Any] = []
     config = Settings(True, frozenset(), frozenset(), False, False, 20)
     backend, manager = object(), object()
 

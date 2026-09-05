@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from typing import Any
+from typing import Any, cast
 
 import pytest
 from fastmcp import Client
@@ -163,10 +163,10 @@ async def test_all_info_is_one_scan_and_excludes_hidden_even_after_cache_expiry(
         manager.active_session_id = "newer"
         return snapshot
 
-    manager.capture_snapshot = mutate_after_capture  # type: ignore[method-assign]
+    cast(Any, manager).capture_snapshot = mutate_after_capture
     async with Client(server) as client:
         result = await client.call_tool("get_all_terminal_info", {"lines": 8})
-    data = result.structured_content
+    data = cast(dict[str, Any], result.structured_content)
     assert backend.scan_count == 1
     assert (data["session_ids"], data["default_session_id"], data["total"]) == (
         ["newer", "older"],

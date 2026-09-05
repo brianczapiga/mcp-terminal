@@ -1,12 +1,12 @@
 """Non-launching terminal backend detection."""
 
-from terminal_mcp.backends.base import AppleScriptRunner
+from terminal_mcp.backends.base import AppleScriptExecutor
 from terminal_mcp.backends.iterm2 import ITerm2Backend
 from terminal_mcp.backends.macos_terminal import MacOSTerminalBackend
 from terminal_mcp.errors import ApplicationUnavailable, AutomationDenied, ScriptFailed
 
 
-def _is_running(runner: AppleScriptRunner, process_name: str) -> bool:
+def _is_running(runner: AppleScriptExecutor, process_name: str) -> bool:
     script = (
         'tell application "System Events" to return '
         f'(exists process "{process_name}") as text'
@@ -17,7 +17,7 @@ def _is_running(runner: AppleScriptRunner, process_name: str) -> bool:
     return result == "true"
 
 
-def _probe(runner: AppleScriptRunner, application: str) -> bool:
+def _probe(runner: AppleScriptExecutor, application: str) -> bool:
     try:
         result = runner.run(
             'tell application "System Events"\n'
@@ -32,7 +32,7 @@ def _probe(runner: AppleScriptRunner, application: str) -> bool:
     return result != "not-running"
 
 
-def detect_backend(runner: AppleScriptRunner):  # type: ignore[no-untyped-def]
+def detect_backend(runner: AppleScriptExecutor):  # type: ignore[no-untyped-def]
     """Choose the preferred running, script-accessible terminal application."""
     if _is_running(runner, "iTerm2") and _probe(runner, "iTerm2"):
         return ITerm2Backend(runner)

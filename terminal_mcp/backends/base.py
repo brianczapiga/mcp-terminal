@@ -46,6 +46,12 @@ class TerminalBackend(Protocol):
     def paste_text(self, session: SessionInfo, text: str) -> None: ...
 
 
+class AppleScriptExecutor(Protocol):
+    """Structural type for production and test AppleScript runners."""
+
+    def run(self, script: str) -> str: ...
+
+
 class AppleScriptRunner:
     """Run AppleScript with bounded execution and sanitized domain errors."""
 
