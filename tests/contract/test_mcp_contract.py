@@ -154,19 +154,31 @@ async def test_reads_selection_and_structured_shapes() -> None:
 async def test_all_info_is_one_scan_and_excludes_hidden_even_after_cache_expiry() -> (
     None
 ):
-    server, backend, _ = setup()
+    server, backend, manager = setup()
+    manager.set_active_session("older")
+    capture = manager.capture_snapshot
+
+    def mutate_after_capture(*args: Any) -> Any:
+        snapshot = capture(*args)
+        manager.active_session_id = "newer"
+        return snapshot
+
+    manager.capture_snapshot = mutate_after_capture  # type: ignore[method-assign]
     async with Client(server) as client:
         result = await client.call_tool("get_all_terminal_info", {"lines": 8})
     data = result.structured_content
     assert backend.scan_count == 1
     assert (data["session_ids"], data["default_session_id"], data["total"]) == (
         ["newer", "older"],
-        "newer",
+        "older",
         2,
     )
     assert [item["content"] for item in data["sessions"]] == [
         "output:newer:8",
         "output:older:8",
+    ]
+    assert [item["session_id"] for item in data["sessions"] if item["active"]] == [
+        "older"
     ]
     assert "hidden" not in repr(data)
 

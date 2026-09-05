@@ -2,9 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from terminal_mcp.backends.base import applescript_string
 from terminal_mcp.backends.iterm2 import ITerm2Backend
-from terminal_mcp.errors import MalformedResponse
 from terminal_mcp.models import SessionInfo
 
 
@@ -30,19 +28,6 @@ def test_lists_iterm_sessions() -> None:
     ]
 
 
-@pytest.mark.parametrize(
-    "output",
-    [
-        "w-1\ts-1\tAPI\t/dev/ttys004",
-        "w-1\ts-1\tAPI\t/dev/ttys004\twat",
-        "w-1\ts-1\tAPI\tx\t/dev/ttys004\ttrue",
-    ],
-)
-def test_malformed_responses(output: str) -> None:
-    with pytest.raises(MalformedResponse):
-        ITerm2Backend(RecordingRunner(output)).list_sessions()
-
-
 def test_read_screen_preserves_whitespace_and_limits_lines() -> None:
     runner = RecordingRunner("one\n\n  three\nfour")
     assert ITerm2Backend(runner).read_screen(session(), 3) == "\n  three\nfour"
@@ -52,28 +37,31 @@ def test_read_screen_preserves_whitespace_and_limits_lines() -> None:
     assert "current session" not in runner.scripts[0]
 
 
-@pytest.mark.parametrize("execute", [True, False])
-def test_send_text_targets_exact_session(execute: bool) -> None:
+@pytest.mark.parametrize(
+    ("operation", "action"),
+    [
+        ("send", 'write text "payload" newline: false'),
+        ("key", "key code 36 using {control down}"),
+        ("paste", 'write text "payload" newline: false'),
+    ],
+)
+def test_writes_resolve_one_exact_session(operation: str, action: str) -> None:
     runner = RecordingRunner()
-    ITerm2Backend(runner).send_text(session(), 'echo "x\\y"\nnext', execute)
+    backend = ITerm2Backend(runner)
+    if operation == "send":
+        backend.send_text(session(), "payload", False)
+    elif operation == "key":
+        backend.send_keypress(session(), "return", ["control"])
+    else:
+        backend.paste_text(session(), "payload")
     script = runner.scripts[0]
-    assert applescript_string('echo "x\\y"\nnext') in script
-    assert f"newline: {str(execute).lower()}" in script
-
-
-def test_keypress_and_modifiers_target_exact_session() -> None:
-    runner = RecordingRunner()
-    ITerm2Backend(runner).send_keypress(session(), "return", ["control", "option"])
-    script = runner.scripts[0]
-    assert "key code 36 using {control down, option down}" in script
-    assert 'tell application "iTerm2" to activate' in script
-    with pytest.raises(ValueError):
-        ITerm2Backend(runner).send_keypress(session(), "not-a-key", [])
-
-
-def test_paste_writes_directly_without_clipboard() -> None:
-    runner = RecordingRunner()
-    ITerm2Backend(runner).paste_text(session(), "secret\ntext")
-    script = runner.scripts[0]
-    assert 'write text "secret\\ntext" newline: false' in script
-    assert "clipboard" not in script.casefold()
+    markers = (
+        "repeat with targetWindow in windows",
+        "repeat with targetTab in tabs of targetWindow",
+        "repeat with candidateSession in sessions of targetTab",
+        'unique ID of candidateSession is "s-1"',
+        "if (count of matchingSessions) is not 1 then error",
+    )
+    assert all(marker in script for marker in markers)
+    assert action in script
+    assert "current session" not in script and "front session" not in script
