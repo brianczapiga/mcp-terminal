@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import sys
 from collections.abc import Callable
-from typing import Annotated, Any, Literal, TypeVar
+from typing import Annotated, Literal, TypeVar
 
 from fastmcp import FastMCP
 from fastmcp.exceptions import ToolError
@@ -26,12 +26,23 @@ from terminal_mcp.errors import (
     WriteDisabled,
 )
 from terminal_mcp.manager import TerminalManager
-from terminal_mcp.models import SessionInfo
+from terminal_mcp.models import (
+    AggregateResult,
+    ListSessionsResult,
+    ScreenResult,
+    ScrollResult,
+    SessionInfo,
+    SessionView,
+    SetActiveResult,
+    WriteResult,
+)
 
 T = TypeVar("T")
 LineCount = Annotated[int, Field(ge=1, le=500)]
 PageCount = Annotated[int, Field(ge=1, le=20)]
 ScreenMode = Literal["focus", "recent-output", "manual"]
+MAX_AGGREGATE_SESSIONS = 20
+MAX_AGGREGATE_CHARACTERS = 200_000
 logger = logging.getLogger(__name__)
 ERROR_MESSAGES = {
     ApplicationUnavailable: "No supported terminal application is available.",
@@ -46,15 +57,20 @@ ERROR_MESSAGES = {
 
 
 def _session_data(
-    session: SessionInfo, active_session_id: str | None
-) -> dict[str, Any]:
-    return {
-        "session_id": session.session_id,
-        "name": session.name,
-        "tty": session.tty_device,
-        "busy": session.is_busy,
-        "active": session.session_id == active_session_id,
-    }
+    session: SessionInfo,
+    active_session_id: str | None,
+    content: str | None = None,
+    content_truncated: bool = False,
+) -> SessionView:
+    return SessionView(
+        session_id=session.session_id,
+        name=session.name,
+        tty=session.tty_device,
+        busy=session.is_busy,
+        active=session.session_id == active_session_id,
+        content=content,
+        content_truncated=content_truncated,
+    )
 
 
 def _tool_errors(operation: Callable[[], T]) -> T:
@@ -64,6 +80,9 @@ def _tool_errors(operation: Callable[[], T]) -> T:
         logger.warning("Terminal operation failed: %s", type(error).__name__)
         message = ERROR_MESSAGES.get(type(error), "The terminal operation failed.")
         raise ToolError(message) from None
+    except Exception as error:
+        logger.error("Unexpected terminal operation failure: %s", type(error).__name__)
+        raise ToolError("The terminal operation failed unexpectedly.") from None
 
 
 def _target_id(manager: TerminalManager, session_id: str | None) -> str:
@@ -83,37 +102,35 @@ def create_server(manager: TerminalManager) -> FastMCP:
     )
 
     @server.tool(description="List eligible terminal sessions without changing them.")
-    def list_sessions() -> dict[str, Any]:
-        def operation() -> dict[str, Any]:
+    def list_sessions() -> ListSessionsResult:
+        def operation() -> ListSessionsResult:
             sessions = manager.list_sessions()
-            return {
-                "sessions": [
+            return ListSessionsResult(
+                sessions=[
                     _session_data(session, manager.active_session_id)
                     for session in sessions
                 ],
-                "total": len(sessions),
-                "active_session_id": manager.active_session_id,
-            }
+                total=len(sessions),
+                active_session_id=manager.active_session_id,
+            )
 
         return _tool_errors(operation)
 
     @server.tool(
         description="Select an eligible session for subsequent focused operations."
     )
-    def set_active_session(session_id: str) -> dict[str, Any]:
-        def operation() -> dict[str, Any]:
+    def set_active_session(session_id: str) -> SetActiveResult:
+        def operation() -> SetActiveResult:
             manager.set_active_session(session_id)
-            return {"success": True, "session_id": session_id}
+            return SetActiveResult(success=True, session_id=session_id)
 
         return _tool_errors(operation)
 
     @server.tool(
         description="Read terminal screen content; this has no terminal side effects."
     )
-    def get_screen(
-        lines: LineCount = 100, mode: ScreenMode = "focus"
-    ) -> dict[str, Any]:
-        def operation() -> dict[str, Any]:
+    def get_screen(lines: LineCount = 100, mode: ScreenMode = "focus") -> ScreenResult:
+        def operation() -> ScreenResult:
             if mode == "recent-output":
                 target_id = manager.most_recent_session().session_id
             elif mode == "manual":
@@ -123,44 +140,40 @@ def create_server(manager: TerminalManager) -> FastMCP:
             else:
                 target_id = _target_id(manager, None)
             content = manager.get_session_content(target_id, lines)
-            return {
-                "session_id": target_id,
-                "mode": mode,
-                "content": content,
-                "lines": lines,
-            }
+            return ScreenResult(
+                session_id=target_id, mode=mode, content=content, lines=lines
+            )
 
         return _tool_errors(operation)
 
     @server.tool(
         description="Read a coherent snapshot of every eligible terminal session."
     )
-    def get_all_terminal_info(lines: LineCount = 100) -> dict[str, Any]:
-        def operation() -> dict[str, Any]:
-            sessions = manager.list_sessions()
-            default_id = (
-                manager.active_session_id
-                if manager.active_session_id is not None
-                else (
-                    min(
-                        sessions, key=lambda item: (-item.observed_at, item.session_id)
-                    ).session_id
-                    if sessions
-                    else None
-                )
+    def get_all_terminal_info(lines: LineCount = 100) -> AggregateResult:
+        def operation() -> AggregateResult:
+            snapshot = manager.capture_snapshot(
+                lines, MAX_AGGREGATE_SESSIONS, MAX_AGGREGATE_CHARACTERS
             )
-            details = []
-            for session in sessions:
-                item = _session_data(session, manager.active_session_id)
-                item["content"] = manager.read_snapshot_session(session, lines)
-                details.append(item)
-            return {
-                "session_ids": [session.session_id for session in sessions],
-                "sessions": details,
-                "default_session_id": default_id,
-                "total": len(sessions),
-                "lines": lines,
-            }
+            sessions = [item.session for item in snapshot.sessions]
+            default_id = manager.active_session_id or snapshot.default_session_id
+            details = [
+                _session_data(
+                    item.session,
+                    manager.active_session_id,
+                    item.content,
+                    item.content_truncated,
+                )
+                for item in snapshot.sessions
+            ]
+            return AggregateResult(
+                session_ids=[session.session_id for session in sessions],
+                sessions=details,
+                default_session_id=default_id,
+                total=snapshot.total,
+                lines=lines,
+                truncated=snapshot.truncated,
+                omitted_session_ids=list(snapshot.omitted_session_ids),
+            )
 
         return _tool_errors(operation)
 
@@ -172,11 +185,11 @@ def create_server(manager: TerminalManager) -> FastMCP:
     )
     def send_input(
         text: str, execute: bool = True, session_id: str | None = None
-    ) -> dict[str, Any]:
-        def operation() -> dict[str, Any]:
+    ) -> WriteResult:
+        def operation() -> WriteResult:
             target_id = _target_id(manager, session_id)
             manager.send_input(target_id, text, execute)
-            return {"success": True, "session_id": target_id, "executed": execute}
+            return WriteResult(success=True, session_id=target_id, executed=execute)
 
         return _tool_errors(operation)
 
@@ -185,22 +198,22 @@ def create_server(manager: TerminalManager) -> FastMCP:
         key: str,
         modifiers: list[str] | None = None,
         session_id: str | None = None,
-    ) -> dict[str, Any]:
-        def operation() -> dict[str, Any]:
+    ) -> WriteResult:
+        def operation() -> WriteResult:
             target_id = _target_id(manager, session_id)
             manager.send_keypress(target_id, key, modifiers or ())
-            return {"success": True, "session_id": target_id}
+            return WriteResult(success=True, session_id=target_id, executed=None)
 
         return _tool_errors(operation)
 
     @server.tool(
         description="Paste literal text into a terminal; writes terminal state."
     )
-    def paste_text(text: str, session_id: str | None = None) -> dict[str, Any]:
-        def operation() -> dict[str, Any]:
+    def paste_text(text: str, session_id: str | None = None) -> WriteResult:
+        def operation() -> WriteResult:
             target_id = _target_id(manager, session_id)
             manager.paste_text(target_id, text)
-            return {"success": True, "session_id": target_id}
+            return WriteResult(success=True, session_id=target_id, executed=None)
 
         return _tool_errors(operation)
 
@@ -209,14 +222,14 @@ def create_server(manager: TerminalManager) -> FastMCP:
     )
     def scroll_back(
         pages: PageCount = 1, session_id: str | None = None
-    ) -> dict[str, Any]:
-        def operation() -> dict[str, Any]:
+    ) -> ScrollResult:
+        def operation() -> ScrollResult:
             target_id = _target_id(manager, session_id)
-            return {
-                "session_id": target_id,
-                "pages": pages,
-                "content": manager.scroll_back(target_id, pages),
-            }
+            return ScrollResult(
+                session_id=target_id,
+                pages=pages,
+                content=manager.scroll_back(target_id, pages),
+            )
 
         return _tool_errors(operation)
 

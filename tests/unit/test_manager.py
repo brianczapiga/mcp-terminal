@@ -247,3 +247,43 @@ def test_snapshot_reads_do_not_rescan_when_cache_expires() -> None:
     assert backend.scan_count == 1
     with pytest.raises(UnknownSession):
         manager.read_snapshot_session(session("a", observed=99), 5)
+
+
+def test_capture_snapshot_bounds_sessions_and_characters() -> None:
+    backend = Backend([[session("c"), session("a"), session("b")]])
+    manager = TerminalManager(backend, settings())
+    snapshot = manager.capture_snapshot(7, max_sessions=2, max_characters=9)
+    assert [(item.session.session_id, item.content) for item in snapshot.sessions] == [
+        ("a", "a:7:1"),
+        ("b", "b:7:"),
+    ]
+    assert snapshot.sessions[1].content_truncated
+    assert snapshot.omitted_session_ids == ("c",)
+    assert snapshot.truncated and backend.scan_count == 1
+
+
+def test_capture_snapshot_blocks_forced_scan_until_reads_finish() -> None:
+    read_started, release_read, second_scan = (threading.Event() for _ in range(3))
+
+    class BlockingBackend(Backend):
+        def list_sessions(self) -> list[SessionInfo]:
+            if self.scan_count:
+                second_scan.set()
+            return super().list_sessions()
+
+        def read_screen(self, target: SessionInfo, lines: int) -> str:
+            read_started.set()
+            assert release_read.wait(timeout=2)
+            return "content"
+
+    manager = TerminalManager(BlockingBackend([[session("a")]]), settings())
+    capture = threading.Thread(target=lambda: manager.capture_snapshot(5, 20, 200_000))
+    capture.start()
+    assert read_started.wait(timeout=2)
+    scan = threading.Thread(target=lambda: manager.list_sessions(force=True))
+    scan.start()
+    assert not second_scan.wait(timeout=0.05)
+    release_read.set()
+    capture.join(timeout=2)
+    scan.join(timeout=2)
+    assert second_scan.is_set()

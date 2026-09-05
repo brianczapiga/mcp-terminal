@@ -12,7 +12,7 @@ from collections.abc import Callable, Sequence
 from terminal_mcp.backends.base import TerminalBackend
 from terminal_mcp.config import Settings
 from terminal_mcp.errors import ExcludedSession, UnknownSession, WriteDisabled
-from terminal_mcp.models import SessionInfo
+from terminal_mcp.models import CapturedSession, SessionInfo, TerminalSnapshot
 
 SCAN_INTERVAL_SECONDS = 2.0
 SELF_TTY_TIMEOUT_SECONDS = 1.0
@@ -174,6 +174,38 @@ class TerminalManager:
             if lines <= 0:
                 return ""
             return self._read_and_buffer(session, lines)
+
+    def capture_snapshot(
+        self, lines: int, max_sessions: int, max_characters: int
+    ) -> TerminalSnapshot:
+        """Discover and capture a bounded, coherent set of eligible sessions."""
+        with self._lock:
+            sessions = sorted(self.list_sessions(), key=lambda item: item.session_id)
+            selected = sessions[: max(0, max_sessions)]
+            omitted = tuple(item.session_id for item in sessions[len(selected) :])
+            remaining = max(0, max_characters)
+            captured = []
+            content_was_truncated = False
+            for session in selected:
+                content = self._read_and_buffer(session, lines)
+                visible = content[:remaining]
+                was_truncated = len(visible) < len(content)
+                captured.append(CapturedSession(session, visible, was_truncated))
+                content_was_truncated |= was_truncated
+                remaining -= len(visible)
+            return TerminalSnapshot(
+                tuple(captured),
+                omitted,
+                bool(omitted) or content_was_truncated,
+                (
+                    min(
+                        sessions, key=lambda item: (-item.observed_at, item.session_id)
+                    ).session_id
+                    if sessions
+                    else None
+                ),
+                len(sessions),
+            )
 
     def _read_and_buffer(self, target: SessionInfo, lines: int) -> str:
         content = self.backend.read_screen(target, lines)

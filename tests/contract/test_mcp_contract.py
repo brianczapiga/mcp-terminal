@@ -77,20 +77,42 @@ def setup(readonly: bool = True) -> tuple[Any, Backend, TerminalManager]:
 async def test_discovery_and_schema_contract() -> None:
     server, _, _ = setup()
     async with Client(server) as client:
-        tools = {item.name: item.inputSchema for item in await client.list_tools()}
+        tools = {item.name: item for item in await client.list_tools()}
     assert set(tools) == TOOLS
     assert all(
-        "request" not in schema.get("properties", {}) for schema in tools.values()
+        "request" not in tool.inputSchema.get("properties", {})
+        for tool in tools.values()
     )
-    lines = tools["get_screen"]["properties"]["lines"]
-    pages = tools["scroll_back"]["properties"]["pages"]
-    mode = tools["get_screen"]["properties"]["mode"]
+    lines = tools["get_screen"].inputSchema["properties"]["lines"]
+    pages = tools["scroll_back"].inputSchema["properties"]["pages"]
+    mode = tools["get_screen"].inputSchema["properties"]["mode"]
     assert (lines["minimum"], lines["maximum"], lines["default"]) == (1, 500, 100)
     assert (pages["minimum"], pages["maximum"], pages["default"]) == (1, 20, 1)
     assert (mode["enum"], mode["default"]) == (
         ["focus", "recent-output", "manual"],
         "focus",
     )
+    outputs = {
+        "list_sessions": {"sessions", "total", "active_session_id"},
+        "set_active_session": {"success", "session_id"},
+        "get_screen": {"session_id", "mode", "content", "lines"},
+        "get_all_terminal_info": {
+            "session_ids",
+            "sessions",
+            "default_session_id",
+            "total",
+            "lines",
+            "truncated",
+            "omitted_session_ids",
+        },
+        "send_input": {"success", "session_id"},
+        "send_keypress": {"success", "session_id"},
+        "paste_text": {"success", "session_id"},
+        "scroll_back": {"session_id", "pages", "content"},
+    }
+    for name, properties in outputs.items():
+        assert properties <= set(tools[name].outputSchema["properties"])
+        assert properties <= set(tools[name].outputSchema["required"])
 
 
 @pytest.mark.asyncio
@@ -106,7 +128,7 @@ async def test_reads_selection_and_structured_shapes() -> None:
         manual = await client.call_tool("get_screen", {"mode": "manual"})
     sessions = listed.structured_content["sessions"]
     assert [item["session_id"] for item in sessions] == ["older", "newer"]
-    assert set(sessions[0]) == {"session_id", "name", "tty", "busy", "active"}
+    assert {"session_id", "name", "tty", "busy", "active"} <= set(sessions[0])
     assert active.structured_content == {"success": True, "session_id": "older"}
     assert recent.structured_content == {
         "session_id": "newer",
@@ -133,13 +155,13 @@ async def test_all_info_is_one_scan_and_excludes_hidden_even_after_cache_expiry(
     data = result.structured_content
     assert backend.scan_count == 1
     assert (data["session_ids"], data["default_session_id"], data["total"]) == (
-        ["older", "newer"],
+        ["newer", "older"],
         "newer",
         2,
     )
     assert [item["content"] for item in data["sessions"]] == [
-        "output:older:8",
         "output:newer:8",
+        "output:older:8",
     ]
     assert "hidden" not in repr(data)
 
@@ -200,6 +222,7 @@ async def test_schema_rejects_invalid_input(tool: str, args: dict[str, Any]) -> 
     [
         AutomationDenied("SECRET"),
         ScriptFailed("SECRET"),
+        RuntimeError("SECRET"),
     ],
 )
 async def test_domain_details_do_not_reach_protocol_or_logs(
@@ -219,7 +242,12 @@ async def test_resource_and_prompts_are_discoverable_and_substantive() -> None:
         templates = await client.list_resource_templates()
         resource = await client.read_resource("terminal://session/older")
         prompts = {item.name for item in await client.list_prompts()}
-        guide = await client.get_prompt("terminal_workflow_guide")
+        calls = [
+            await client.get_prompt("terminal_workflow_guide"),
+            await client.get_prompt("terminal_session_summary", {"session_id": "ARG"}),
+            await client.get_prompt("terminal_command_suggestion", {"goal": "ARG"}),
+            await client.get_prompt("terminal_troubleshooting", {"issue": "ARG"}),
+        ]
     assert [str(item.uriTemplate) for item in templates] == [
         "terminal://session/{session_id}"
     ]
@@ -228,4 +256,6 @@ async def test_resource_and_prompts_are_discoverable_and_substantive() -> None:
         "output:older:100",
     )
     assert prompts == PROMPTS
-    assert len(guide.messages[0].content.text) > 30
+    texts = [item.messages[0].content.text for item in calls]
+    assert "read" in texts[0].casefold()
+    assert all("ARG" in text and "do not" in text.casefold() for text in texts[1:])
