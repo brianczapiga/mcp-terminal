@@ -2,99 +2,39 @@ name: CI
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [main, develop]
   pull_request:
-    branches: [ main ]
+    branches: [main]
+
+permissions:
+  contents: read
 
 jobs:
-  test:
+  check:
     runs-on: macos-latest
-    
     strategy:
+      fail-fast: false
       matrix:
-        python-version: ["3.10", "3.11", "3.12"]
-    
-    steps:
-    - uses: actions/checkout@v4
-    
-    - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v4
-      with:
-        python-version: ${{ matrix.python-version }}
-    
-    - name: Cache pip dependencies
-      uses: actions/cache@v3
-      with:
-        path: ~/.cache/pip
-        key: ${{ runner.os }}-pip-${{ matrix.python-version }}-${{ hashFiles('**/requirements.txt') }}
-        restore-keys: |
-          ${{ runner.os }}-pip-${{ matrix.python-version }}-
-          ${{ runner.os }}-pip-
-    
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install -r requirements.txt
-        pip install -r requirements-dev.txt
-    
-    - name: Lint with flake8
-      run: |
-        # stop the build if there are Python syntax errors or undefined names
-        flake8 terminal_mcp_server.py health_check.py tests/ --count --select=E9,F63,F7,F82 --show-source --statistics
-        # exit-zero treats all errors as warnings
-        flake8 terminal_mcp_server.py health_check.py tests/ --count --exit-zero --max-complexity=10 --max-line-length=88 --statistics
-    
-    - name: Check formatting with black
-      run: |
-        black --check --diff .
-    
-    - name: Lint with pylint
-      run: |
-        pylint terminal_mcp_server.py health_check.py tests/ --disable=C0114,C0115,C0116,R0903,R0913,R0914,R0915,W0621,C0301,C0302,E0401,W1203,W1510,W0718,W1309,W0611,W0612,R1705,C0415,W0212,W0201,C0411,R0912,W1404
-    
-    - name: Type check with mypy
-      run: |
-        mypy terminal_mcp_server.py health_check.py tests/ --ignore-missing-imports
-    
-    - name: Test with pytest
-      run: |
-        pytest --verbose --tb=short || echo "Tests not yet implemented - continuing"
-      continue-on-error: true
-    
-    # Coverage upload disabled until tests are fully implemented
-    # - name: Upload coverage to Codecov
-    #   uses: codecov/codecov-action@v3
-    #   with:
-    #     file: ./coverage.xml
-    #     flags: unittests
-    #     name: codecov-umbrella
-    #     fail_ci_if_error: true
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
 
-  security:
-    runs-on: macos-latest
-    
     steps:
-    - uses: actions/checkout@v4
-    
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: "3.11"
-    
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install bandit safety
-    
-    - name: Run security checks
-      run: |
-        bandit -r . -f json -o bandit-report.json || true
-        safety check --json --output safety-report.json || true
-    
-    - name: Upload security reports
-      uses: actions/upload-artifact@v4
-      with:
-        name: security-reports
-        path: |
-          bandit-report.json
-          safety-report.json 
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+      - name: Install project and development tools
+        run: python -m pip install '.[dev]'
+      - name: Run required checks
+        run: |
+          ruff check .
+          ruff format --check .
+          mypy terminal_mcp tests
+          pytest -m "not smoke"
+          python -m build --no-isolation
+      - name: Verify clean wheel install and entry point
+        run: |
+          python -m venv "$RUNNER_TEMP/wheel-check"
+          "$RUNNER_TEMP/wheel-check/bin/python" -m pip install dist/*.whl
+          test -x "$RUNNER_TEMP/wheel-check/bin/terminal-mcp-server"
+          "$RUNNER_TEMP/wheel-check/bin/python" -c "import terminal_mcp.server"

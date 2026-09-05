@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "terminal": {
+      "command": "/absolute/path/to/mcp-terminal/.venv/bin/terminal-mcp-server",
+      "args": [],
+      "env": {
+        "MCP_TERMINAL_ENV_FILE": "/absolute/path/to/mcp-terminal/.env"
+      }
+    }
+  }
+}
