@@ -39,8 +39,8 @@ Add the server for your user account:
 
 ```bash
 claude mcp add --scope user --transport stdio \
-  --env MCP_TERMINAL_ENV_FILE=/absolute/path/to/mcp-terminal/.env \
-  terminal -- /absolute/path/to/mcp-terminal/.venv/bin/terminal-mcp-server
+  terminal --env MCP_TERMINAL_ENV_FILE=/absolute/path/to/mcp-terminal/.env \
+  -- /absolute/path/to/mcp-terminal/.venv/bin/terminal-mcp-server
 claude mcp get terminal
 ```
 
