@@ -6,7 +6,7 @@ PYTHON := $(VENV)/bin/python
 help:
 	@echo "Available commands:"
 	@echo "  setup      Create .venv and install the project with dev tools"
-	@echo "  install    Install the project in the current Python environment"
+	@echo "  install    Create .venv (if needed) and install the project into it (same as setup)"
 	@echo "  test       Run the test suite"
 	@echo "  run        Run the MCP server"
 	@echo "  run-safe   Run with terminal writes disabled"
@@ -27,8 +27,7 @@ setup:
 	fi
 	@echo "Setup complete. Use $(PYTHON) or tools in $(VENV)/bin directly."
 
-install:
-	python3 -m pip install .
+install: setup
 
 test:
 	$(VENV)/bin/pytest
