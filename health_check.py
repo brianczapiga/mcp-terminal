@@ -5,8 +5,8 @@ This script verifies that the server can be imported and basic functionality
 works.
 """
 
-import sys
 import subprocess
+import sys
 
 
 def check_python_version():
@@ -80,9 +80,7 @@ def check_permissions():
     """Check if Accessibility permissions are granted."""
     print("⚠️  Checking Accessibility permissions...")
     print("   Please ensure Terminal.app or iTerm2 has Accessibility permissions")
-    print(
-        "   Go to System Preferences → Security & Privacy → Privacy → " "Accessibility"
-    )
+    print("   Go to System Preferences → Security & Privacy → Privacy → Accessibility")
     return True
 
 
