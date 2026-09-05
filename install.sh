@@ -32,11 +32,12 @@ fi
 if [ ! -f .env ]; then
     cp env.example .env
     echo "Created .env from env.example."
+    echo "Terminal writes are disabled by default until you edit .env."
 else
     echo "Preserved existing .env."
+    echo "Inspect MCP_TERMINAL_READONLY in .env to confirm the current write policy."
 fi
 
 echo "Installation complete."
-echo "Terminal writes are disabled until you edit .env to enable them."
 echo "Run: .venv/bin/python -m terminal_mcp"
 echo "Health check: .venv/bin/python health_check.py"
