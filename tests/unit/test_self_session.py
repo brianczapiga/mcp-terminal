@@ -69,3 +69,16 @@ def test_subprocess_failures_return_none(failure: BaseException) -> None:
 
 def test_nonzero_returns_none() -> None:
     assert detect_controlling_tty(9, lambda *a, **k: result("ttys1 1", 2)) is None
+
+
+def test_parent_traversal_obeys_overall_deadline() -> None:
+    now = [10.0]
+    timeouts: list[float] = []
+
+    def run(*args: object, **kwargs: object) -> subprocess.CompletedProcess[str]:
+        timeouts.append(float(kwargs["timeout"]))
+        now[0] += 0.75
+        return result(f"?? {100 + len(timeouts)}")
+
+    assert detect_controlling_tty(100, run, clock=lambda: now[0]) is None
+    assert timeouts == [1.0, 1.0, 0.5]

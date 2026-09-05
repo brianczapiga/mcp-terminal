@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import subprocess
+import threading
 import time
 from collections import deque
 from collections.abc import Callable, Sequence
@@ -26,13 +27,20 @@ def _normalize_tty(tty: str) -> str:
 def detect_controlling_tty(
     pid: int | None = None,
     runner: Callable[..., subprocess.CompletedProcess[str]] = subprocess.run,
+    *,
+    clock: Callable[[], float] = time.monotonic,
+    overall_timeout: float = 2.0,
 ) -> str | None:
     """Best-effort discovery of this process tree's controlling TTY."""
     current_pid = os.getpid() if pid is None else pid
     visited: set[int] = set()
+    deadline = clock() + max(0.0, overall_timeout)
 
     for _ in range(MAX_PARENT_DEPTH):
         if current_pid <= 1 or current_pid in visited:
+            return None
+        remaining = deadline - clock()
+        if remaining <= 0:
             return None
         visited.add(current_pid)
         try:
@@ -40,7 +48,7 @@ def detect_controlling_tty(
                 ["ps", "-o", "tty=", "-o", "ppid=", "-p", str(current_pid)],
                 capture_output=True,
                 text=True,
-                timeout=SELF_TTY_TIMEOUT_SECONDS,
+                timeout=min(SELF_TTY_TIMEOUT_SECONDS, remaining),
                 check=False,
             )
         except (subprocess.TimeoutExpired, TimeoutError, FileNotFoundError, OSError):
@@ -81,6 +89,7 @@ class TerminalManager:
         self.output_buffers: dict[str, deque[str]] = {}
         self._last_scan_at: float | None = None
         self._buffer_size = max(1, buffer_size)
+        self._lock = threading.RLock()
         self._excluded_ttys = set(settings.excluded_ttys)
         if settings.detect_self_session:
             detected_tty = detect_controlling_tty()
@@ -94,79 +103,88 @@ class TerminalManager:
         )
 
     def list_sessions(self, force: bool = False) -> list[SessionInfo]:
-        now = self.clock()
-        if (
-            force
-            or self._last_scan_at is None
-            or now - self._last_scan_at >= SCAN_INTERVAL_SECONDS
-        ):
-            discovered = self.backend.list_sessions()
-            self.sessions = {item.session_id: item for item in discovered}
-            self._last_scan_at = now
-            stale_ids = self.output_buffers.keys() - self.sessions.keys()
-            for session_id in stale_ids:
-                del self.output_buffers[session_id]
-            if self.active_session_id is not None:
-                active = self.sessions.get(self.active_session_id)
-                if active is None or self._is_excluded(active):
-                    self.active_session_id = None
-        return [item for item in self.sessions.values() if not self._is_excluded(item)]
+        with self._lock:
+            now = self.clock()
+            if (
+                force
+                or self._last_scan_at is None
+                or now - self._last_scan_at >= SCAN_INTERVAL_SECONDS
+            ):
+                discovered = self.backend.list_sessions()
+                self.sessions = {item.session_id: item for item in discovered}
+                self._last_scan_at = now
+                stale_ids = self.output_buffers.keys() - self.sessions.keys()
+                for session_id in stale_ids:
+                    del self.output_buffers[session_id]
+                if self.active_session_id is not None:
+                    active = self.sessions.get(self.active_session_id)
+                    if active is None or self._is_excluded(active):
+                        self.active_session_id = None
+            return [
+                item for item in self.sessions.values() if not self._is_excluded(item)
+            ]
 
     def most_recent_session(self) -> SessionInfo:
-        sessions = self.list_sessions()
-        if not sessions:
-            raise UnknownSession("No eligible terminal sessions are available")
-        return min(sessions, key=lambda item: (-item.observed_at, item.session_id))
+        with self._lock:
+            sessions = self.list_sessions()
+            if not sessions:
+                raise UnknownSession("No eligible terminal sessions are available")
+            return min(sessions, key=lambda item: (-item.observed_at, item.session_id))
 
     def set_active_session(self, session_id: str) -> None:
-        self.list_sessions()
-        target = self.sessions.get(session_id)
-        if target is None:
-            raise UnknownSession(f"Unknown terminal session: {session_id}")
-        if self._is_excluded(target):
-            raise ExcludedSession(f"Terminal session is excluded: {session_id}")
-        self.active_session_id = session_id
+        with self._lock:
+            self.list_sessions()
+            target = self.sessions.get(session_id)
+            if target is None:
+                raise UnknownSession(f"Unknown terminal session: {session_id}")
+            if self._is_excluded(target):
+                raise ExcludedSession(f"Terminal session is excluded: {session_id}")
+            self.active_session_id = session_id
 
     def _resolve_target(self, session_id: str | None) -> SessionInfo:
-        explicitly_supplied = session_id is not None
-        self.list_sessions()
-        if session_id is None:
-            session_id = self.active_session_id
+        with self._lock:
+            explicitly_supplied = session_id is not None
+            self.list_sessions()
             if session_id is None:
-                return self.most_recent_session()
-        target = self.sessions.get(session_id)
-        if target is None:
-            raise UnknownSession(f"Unknown terminal session: {session_id}")
-        if self._is_excluded(target) and not (
-            explicitly_supplied and self.settings.allow_self_target
-        ):
-            raise ExcludedSession(f"Terminal session is excluded: {session_id}")
-        return target
+                session_id = self.active_session_id
+                if session_id is None:
+                    return self.most_recent_session()
+            target = self.sessions.get(session_id)
+            if target is None:
+                raise UnknownSession(f"Unknown terminal session: {session_id}")
+            if self._is_excluded(target) and not (
+                explicitly_supplied and self.settings.allow_self_target
+            ):
+                raise ExcludedSession(f"Terminal session is excluded: {session_id}")
+            return target
 
     def get_session_content(self, session_id: str, lines: int = 100) -> str:
-        target = self._resolve_target(session_id)
-        if lines <= 0:
-            return ""
-        content = self.backend.read_screen(target, lines)
-        buffer = self.output_buffers.setdefault(
-            target.session_id, deque(maxlen=self._buffer_size)
-        )
-        buffer.append(content)
-        return content
+        with self._lock:
+            target = self._resolve_target(session_id)
+            if lines <= 0:
+                return ""
+            content = self.backend.read_screen(target, lines)
+            buffer = self.output_buffers.setdefault(
+                target.session_id, deque(maxlen=self._buffer_size)
+            )
+            buffer.append(content)
+            return content
 
     def get_active_session_content(self, lines: int = 100) -> str:
-        target = self._resolve_target(None)
-        return self.get_session_content(target.session_id, lines)
+        with self._lock:
+            target = self._resolve_target(None)
+            return self.get_session_content(target.session_id, lines)
 
     def scroll_back(self, session_id: str, pages: int = 1) -> str:
-        self._resolve_target(session_id)
-        if pages <= 0:
-            return ""
-        buffer = self.output_buffers.get(session_id)
-        if not buffer:
-            return ""
-        count = min(pages * SCROLL_ENTRIES_PER_PAGE, len(buffer))
-        return "\n".join(list(buffer)[-count:])
+        with self._lock:
+            self._resolve_target(session_id)
+            if pages <= 0:
+                return ""
+            buffer = self.output_buffers.get(session_id)
+            if not buffer:
+                return ""
+            count = min(pages * SCROLL_ENTRIES_PER_PAGE, len(buffer))
+            return "\n".join(list(buffer)[-count:])
 
     def _require_write(self) -> None:
         if self.settings.readonly:
@@ -176,7 +194,8 @@ class TerminalManager:
         self, session_id: str | None, text: str, execute: bool = True
     ) -> None:
         self._require_write()
-        self.backend.send_text(self._resolve_target(session_id), text, execute)
+        with self._lock:
+            self.backend.send_text(self._resolve_target(session_id), text, execute)
 
     def send_keypress(
         self,
@@ -185,8 +204,10 @@ class TerminalManager:
         modifiers: Sequence[str] = (),
     ) -> None:
         self._require_write()
-        self.backend.send_keypress(self._resolve_target(session_id), key, modifiers)
+        with self._lock:
+            self.backend.send_keypress(self._resolve_target(session_id), key, modifiers)
 
     def paste_text(self, session_id: str | None, text: str) -> None:
         self._require_write()
-        self.backend.paste_text(self._resolve_target(session_id), text)
+        with self._lock:
+            self.backend.paste_text(self._resolve_target(session_id), text)
