@@ -145,7 +145,9 @@ class TerminalManager:
 
     def get_session_content(self, session_id: str, lines: int = 100) -> str:
         target = self._resolve_target(session_id)
-        content = self.backend.read_screen(target, max(1, lines))
+        if lines <= 0:
+            return ""
+        content = self.backend.read_screen(target, lines)
         buffer = self.output_buffers.setdefault(
             target.session_id, deque(maxlen=self._buffer_size)
         )

@@ -114,11 +114,21 @@ def test_active_validation_fallback_and_recent_ties() -> None:
     backend = Backend([[session("z", observed=5), session("a", observed=5)]])
     manager = TerminalManager(backend, settings())
     assert manager.most_recent_session().session_id == "a"
-    assert manager.get_active_session_content(0) == "a:1:1"
+    assert manager.get_active_session_content(7) == "a:7:1"
     manager.set_active_session("z")
     assert manager.get_active_session_content(4) == "z:4:2"
     with pytest.raises(UnknownSession):
         manager.set_active_session("missing")
+
+
+@pytest.mark.parametrize("lines", [0, -3])
+def test_nonpositive_read_returns_empty_without_backend_or_buffer(lines: int) -> None:
+    backend = Backend([[session("a")]])
+    manager = TerminalManager(backend, settings())
+
+    assert manager.get_session_content("a", lines) == ""
+    assert backend.calls == []
+    assert "a" not in manager.output_buffers
 
 
 def test_read_excluded_without_override_fails() -> None:
