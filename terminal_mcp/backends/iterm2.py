@@ -28,7 +28,7 @@ class ITerm2Backend:
         script = r"""
 on cleanField(theValue)
     set theText to theValue as text
-    set AppleScript's text item delimiters to {ASCII character 9, ASCII character 10, ASCII character 13}
+    set AppleScript's text item delimiters to {ASCII character 9, ASCII character 10, ASCII character 13, character id 133, character id 8232, character id 8233}
     set theParts to text items of theText
     set AppleScript's text item delimiters to " "
     set cleanText to theParts as text
@@ -65,17 +65,24 @@ return outputRecords as text
         session_id = applescript_string(session.tab_id)
         return (
             'tell application "iTerm2"\n'
-            f"set targetSession to first session whose unique ID is {session_id}\n"
+            "set matchingSessions to {}\n"
+            "repeat with targetWindow in windows\n"
+            "repeat with targetTab in tabs of targetWindow\n"
+            "repeat with candidateSession in sessions of targetTab\n"
+            f"if unique ID of candidateSession is {session_id} then set end of matchingSessions to candidateSession\n"
+            "end repeat\n"
+            "end repeat\n"
+            "end repeat\n"
+            'if (count of matchingSessions) is not 1 then error "iTerm2 session unavailable or ambiguous" number -2701\n'
+            "set targetSession to item 1 of matchingSessions\n"
         )
 
     def read_screen(self, session: SessionInfo, lines: int) -> str:
-        if lines < 0:
-            raise ValueError("lines must not be negative")
+        if lines <= 0:
+            return ""
         output = self._runner.run(
             self._target(session) + "return contents of targetSession\nend tell"
         )
-        if lines == 0:
-            return ""
         return "\n".join(output.split("\n")[-lines:])
 
     def send_text(self, session: SessionInfo, text: str, execute: bool) -> None:

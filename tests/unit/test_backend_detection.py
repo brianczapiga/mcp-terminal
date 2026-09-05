@@ -38,6 +38,8 @@ def test_prefers_running_accessible_iterm() -> None:
     runner = SequenceRunner(["true", "ok"])
     assert isinstance(detect_backend(runner), ITerm2Backend)
     assert all("launch" not in script.casefold() for script in runner.scripts)
+    assert 'exists process "iTerm2"' in runner.scripts[1]
+    assert 'tell application "iTerm2"' in runner.scripts[1]
 
 
 def test_falls_back_to_terminal_when_iterm_not_running() -> None:

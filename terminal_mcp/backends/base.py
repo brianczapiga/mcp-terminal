@@ -11,6 +11,7 @@ from terminal_mcp.errors import (
     AutomationDenied,
     ScriptFailed,
     ScriptTimedOut,
+    UnknownSession,
 )
 from terminal_mcp.models import SessionInfo
 
@@ -73,6 +74,10 @@ class AppleScriptRunner:
                 raise AutomationDenied(
                     "Automation permission was denied; allow terminal automation "
                     "in macOS System Settings"
+                )
+            if "-2701" in result.stderr:
+                raise UnknownSession(
+                    "The requested terminal session is no longer uniquely available"
                 )
             raise ScriptFailed("AppleScript execution failed")
 

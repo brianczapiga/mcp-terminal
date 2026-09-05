@@ -19,12 +19,17 @@ def _is_running(runner: AppleScriptRunner, process_name: str) -> bool:
 
 def _probe(runner: AppleScriptRunner, application: str) -> bool:
     try:
-        runner.run(f'tell application "{application}" to return name')
+        result = runner.run(
+            'tell application "System Events"\n'
+            f'if not (exists process "{application}") then return "not-running"\n'
+            "end tell\n"
+            f'tell application "{application}" to return name'
+        )
     except AutomationDenied:
         raise
     except (ApplicationUnavailable, ScriptFailed):
         return False
-    return True
+    return result != "not-running"
 
 
 def detect_backend(runner: AppleScriptRunner):  # type: ignore[no-untyped-def]

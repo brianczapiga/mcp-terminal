@@ -14,6 +14,7 @@ from terminal_mcp.errors import (
     AutomationDenied,
     ScriptFailed,
     ScriptTimedOut,
+    UnknownSession,
 )
 from terminal_mcp.models import SessionInfo
 
@@ -126,6 +127,21 @@ def test_run_classifies_generic_nonzero_exit(monkeypatch: pytest.MonkeyPatch) ->
 
     with pytest.raises(ScriptFailed, match="AppleScript execution failed"):
         AppleScriptRunner().run("broken script")
+
+
+def test_run_classifies_backend_unknown_session_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        subprocess,
+        "run",
+        lambda *args, **kwargs: completed_process(
+            returncode=1, stderr="execution error: unavailable (-2701)"
+        ),
+    )
+
+    with pytest.raises(UnknownSession, match="no longer uniquely available"):
+        AppleScriptRunner().run("resolve exact target")
 
 
 def test_run_does_not_classify_unrelated_permission_denial_as_automation(
