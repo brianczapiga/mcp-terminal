@@ -159,11 +159,20 @@ class TerminalManager:
             return target
 
     def get_session_content(self, session_id: str, lines: int = 100) -> str:
+        return self.read_screen(session_id, lines)[1]
+
+    def read_screen(self, session_id: str | None, lines: int = 100) -> tuple[str, str]:
+        """Resolve and read atomically, returning the actual eligible target ID."""
         with self._lock:
             target = self._resolve_target(session_id)
             if lines <= 0:
-                return ""
-            return self._read_and_buffer(target, lines)
+                return target.session_id, ""
+            return target.session_id, self._read_and_buffer(target, lines)
+
+    def read_recent_screen(self, lines: int = 100) -> tuple[str, str]:
+        with self._lock:
+            target = self.most_recent_session()
+            return target.session_id, self._read_and_buffer(target, lines)
 
     def read_snapshot_session(self, session: SessionInfo, lines: int = 100) -> str:
         """Read a session from a prior scan without triggering another discovery."""
@@ -230,20 +239,23 @@ class TerminalManager:
         return content
 
     def get_active_session_content(self, lines: int = 100) -> str:
+        return self.read_screen(None, lines)[1]
+
+    def scroll_back_target(
+        self, session_id: str | None, pages: int = 1
+    ) -> tuple[str, str]:
         with self._lock:
-            target = self._resolve_target(None)
-            return self.get_session_content(target.session_id, lines)
+            target = self._resolve_target(session_id)
+            if pages <= 0:
+                return target.session_id, ""
+            buffer = self.output_buffers.get(target.session_id)
+            if not buffer:
+                return target.session_id, ""
+            count = min(pages * SCROLL_ENTRIES_PER_PAGE, len(buffer))
+            return target.session_id, "\n".join(list(buffer)[-count:])
 
     def scroll_back(self, session_id: str, pages: int = 1) -> str:
-        with self._lock:
-            self._resolve_target(session_id)
-            if pages <= 0:
-                return ""
-            buffer = self.output_buffers.get(session_id)
-            if not buffer:
-                return ""
-            count = min(pages * SCROLL_ENTRIES_PER_PAGE, len(buffer))
-            return "\n".join(list(buffer)[-count:])
+        return self.scroll_back_target(session_id, pages)[1]
 
     def _require_write(self) -> None:
         if self.settings.readonly:
@@ -251,22 +263,28 @@ class TerminalManager:
 
     def send_input(
         self, session_id: str | None, text: str, execute: bool = True
-    ) -> None:
-        self._require_write()
+    ) -> str:
         with self._lock:
-            self.backend.send_text(self._resolve_target(session_id), text, execute)
+            self._require_write()
+            target = self._resolve_target(session_id)
+            self.backend.send_text(target, text, execute)
+            return target.session_id
 
     def send_keypress(
         self,
         session_id: str | None,
         key: str,
         modifiers: Sequence[str] = (),
-    ) -> None:
-        self._require_write()
+    ) -> str:
         with self._lock:
-            self.backend.send_keypress(self._resolve_target(session_id), key, modifiers)
+            self._require_write()
+            target = self._resolve_target(session_id)
+            self.backend.send_keypress(target, key, modifiers)
+            return target.session_id
 
-    def paste_text(self, session_id: str | None, text: str) -> None:
-        self._require_write()
+    def paste_text(self, session_id: str | None, text: str) -> str:
         with self._lock:
-            self.backend.paste_text(self._resolve_target(session_id), text)
+            self._require_write()
+            target = self._resolve_target(session_id)
+            self.backend.paste_text(target, text)
+            return target.session_id

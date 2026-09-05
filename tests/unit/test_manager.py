@@ -223,6 +223,33 @@ def test_every_write_is_gated_and_writable_delegates_exact_arguments() -> None:
     ]
 
 
+def test_only_caller_supplied_id_can_override_refreshed_exclusion() -> None:
+    now = [0.0]
+    eligible = session("self", tty="/dev/ttys1")
+    excluded = session("self", tty="/dev/ttys9")
+    backend = Backend([[eligible], [excluded]])
+    manager = TerminalManager(
+        backend,
+        settings(
+            readonly=False,
+            excluded_ttys=frozenset({"/dev/ttys9"}),
+            allow_self_target=True,
+        ),
+        clock=lambda: now[0],
+    )
+    manager.set_active_session("self")
+    now[0] = 3.0
+    for write in (
+        lambda: manager.send_input(None, "secret"),
+        lambda: manager.send_keypress(None, "k"),
+        lambda: manager.paste_text(None, "secret"),
+    ):
+        with pytest.raises(UnknownSession):
+            write()
+    assert backend.calls == []
+    assert manager.send_input("self", "allowed") == "self"
+
+
 def test_buffers_are_bounded_and_scroll_back_is_deterministic() -> None:
     backend = Backend([[session("a")]])
     manager = TerminalManager(backend, settings(), buffer_size=3)

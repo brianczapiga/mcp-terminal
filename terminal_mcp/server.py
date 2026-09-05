@@ -87,14 +87,6 @@ def _tool_errors(operation: Callable[[], T]) -> T:
         raise ToolError("The terminal operation failed unexpectedly.") from None
 
 
-def _target_id(manager: TerminalManager, session_id: str | None) -> str:
-    if session_id is not None:
-        return session_id
-    if manager.active_session_id is not None:
-        return manager.active_session_id
-    return manager.most_recent_session().session_id
-
-
 def create_server(manager: TerminalManager) -> FastMCP:
     """Create an in-memory server around an already configured manager."""
     server = FastMCP(
@@ -134,14 +126,13 @@ def create_server(manager: TerminalManager) -> FastMCP:
     def get_screen(lines: LineCount = 100, mode: ScreenMode = "focus") -> ScreenResult:
         def operation() -> ScreenResult:
             if mode == "recent-output":
-                target_id = manager.most_recent_session().session_id
+                target_id, content = manager.read_recent_screen(lines)
             elif mode == "manual":
                 if manager.active_session_id is None:
                     raise ToolError("Manual mode requires an active terminal session")
-                target_id = manager.active_session_id
+                target_id, content = manager.read_screen(None, lines)
             else:
-                target_id = _target_id(manager, None)
-            content = manager.get_session_content(target_id, lines)
+                target_id, content = manager.read_screen(None, lines)
             return ScreenResult(
                 session_id=target_id, mode=mode, content=content, lines=lines
             )
@@ -189,8 +180,7 @@ def create_server(manager: TerminalManager) -> FastMCP:
         text: str, execute: bool = True, session_id: str | None = None
     ) -> WriteResult:
         def operation() -> WriteResult:
-            target_id = _target_id(manager, session_id)
-            manager.send_input(target_id, text, execute)
+            target_id = manager.send_input(session_id, text, execute)
             return WriteResult(success=True, session_id=target_id, executed=execute)
 
         return _tool_errors(operation)
@@ -202,8 +192,7 @@ def create_server(manager: TerminalManager) -> FastMCP:
         session_id: str | None = None,
     ) -> WriteResult:
         def operation() -> WriteResult:
-            target_id = _target_id(manager, session_id)
-            manager.send_keypress(target_id, key, modifiers or ())
+            target_id = manager.send_keypress(session_id, key, modifiers or ())
             return WriteResult(success=True, session_id=target_id, executed=None)
 
         return _tool_errors(operation)
@@ -213,8 +202,7 @@ def create_server(manager: TerminalManager) -> FastMCP:
     )
     def paste_text(text: str, session_id: str | None = None) -> WriteResult:
         def operation() -> WriteResult:
-            target_id = _target_id(manager, session_id)
-            manager.paste_text(target_id, text)
+            target_id = manager.paste_text(session_id, text)
             return WriteResult(success=True, session_id=target_id, executed=None)
 
         return _tool_errors(operation)
@@ -226,11 +214,11 @@ def create_server(manager: TerminalManager) -> FastMCP:
         pages: PageCount = 1, session_id: str | None = None
     ) -> ScrollResult:
         def operation() -> ScrollResult:
-            target_id = _target_id(manager, session_id)
+            target_id, content = manager.scroll_back_target(session_id, pages)
             return ScrollResult(
                 session_id=target_id,
                 pages=pages,
-                content=manager.scroll_back(target_id, pages),
+                content=content,
             )
 
         return _tool_errors(operation)
