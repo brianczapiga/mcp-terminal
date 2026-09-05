@@ -231,3 +231,19 @@ def test_buffers_are_bounded_and_scroll_back_is_deterministic() -> None:
     assert list(manager.output_buffers["a"]) == ["a:5:3", "a:5:4", "a:5:5"]
     assert manager.scroll_back("a", pages=1) == "a:5:3\na:5:4\na:5:5"
     assert manager.scroll_back("a", pages=0) == ""
+
+
+def test_snapshot_reads_do_not_rescan_when_cache_expires() -> None:
+    now = [0.0]
+    backend = Backend([[session("a"), session("b")]])
+    manager = TerminalManager(backend, settings(), clock=lambda: now[0])
+    snapshot = manager.list_sessions()
+
+    now[0] = 10.0
+    assert [manager.read_snapshot_session(item, 7) for item in snapshot] == [
+        "a:7:1",
+        "b:7:2",
+    ]
+    assert backend.scan_count == 1
+    with pytest.raises(UnknownSession):
+        manager.read_snapshot_session(session("a", observed=99), 5)

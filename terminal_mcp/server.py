@@ -14,7 +14,17 @@ from pydantic import Field
 from terminal_mcp.backends.base import AppleScriptRunner
 from terminal_mcp.backends.detect import detect_backend
 from terminal_mcp.config import Settings
-from terminal_mcp.errors import TerminalMcpError
+from terminal_mcp.errors import (
+    ApplicationUnavailable,
+    AutomationDenied,
+    ExcludedSession,
+    MalformedResponse,
+    ScriptFailed,
+    ScriptTimedOut,
+    TerminalMcpError,
+    UnknownSession,
+    WriteDisabled,
+)
 from terminal_mcp.manager import TerminalManager
 from terminal_mcp.models import SessionInfo
 
@@ -22,6 +32,17 @@ T = TypeVar("T")
 LineCount = Annotated[int, Field(ge=1, le=500)]
 PageCount = Annotated[int, Field(ge=1, le=20)]
 ScreenMode = Literal["focus", "recent-output", "manual"]
+logger = logging.getLogger(__name__)
+ERROR_MESSAGES = {
+    ApplicationUnavailable: "No supported terminal application is available.",
+    AutomationDenied: "Terminal automation permission is required.",
+    ExcludedSession: "The requested terminal session is excluded by policy.",
+    MalformedResponse: "The terminal returned an unreadable response.",
+    ScriptFailed: "The terminal automation operation failed.",
+    ScriptTimedOut: "The terminal automation operation timed out.",
+    UnknownSession: "The requested terminal session is unavailable.",
+    WriteDisabled: "Terminal writes are disabled by policy.",
+}
 
 
 def _session_data(
@@ -40,7 +61,9 @@ def _tool_errors(operation: Callable[[], T]) -> T:
     try:
         return operation()
     except TerminalMcpError as error:
-        raise ToolError(str(error)) from None
+        logger.warning("Terminal operation failed: %s", type(error).__name__)
+        message = ERROR_MESSAGES.get(type(error), "The terminal operation failed.")
+        raise ToolError(message) from None
 
 
 def _target_id(manager: TerminalManager, session_id: str | None) -> str:
@@ -129,7 +152,7 @@ def create_server(manager: TerminalManager) -> FastMCP:
             details = []
             for session in sessions:
                 item = _session_data(session, manager.active_session_id)
-                item["content"] = manager.get_session_content(session.session_id, lines)
+                item["content"] = manager.read_snapshot_session(session, lines)
                 details.append(item)
             return {
                 "session_ids": [session.session_id for session in sessions],

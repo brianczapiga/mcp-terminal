@@ -163,12 +163,25 @@ class TerminalManager:
             target = self._resolve_target(session_id)
             if lines <= 0:
                 return ""
-            content = self.backend.read_screen(target, lines)
-            buffer = self.output_buffers.setdefault(
-                target.session_id, deque(maxlen=self._buffer_size)
-            )
-            buffer.append(content)
-            return content
+            return self._read_and_buffer(target, lines)
+
+    def read_snapshot_session(self, session: SessionInfo, lines: int = 100) -> str:
+        """Read a session from a prior scan without triggering another discovery."""
+        with self._lock:
+            known = self.sessions.get(session.session_id)
+            if known != session or self._is_excluded(session):
+                raise UnknownSession("The terminal session snapshot is no longer valid")
+            if lines <= 0:
+                return ""
+            return self._read_and_buffer(session, lines)
+
+    def _read_and_buffer(self, target: SessionInfo, lines: int) -> str:
+        content = self.backend.read_screen(target, lines)
+        buffer = self.output_buffers.setdefault(
+            target.session_id, deque(maxlen=self._buffer_size)
+        )
+        buffer.append(content)
+        return content
 
     def get_active_session_content(self, lines: int = 100) -> str:
         with self._lock:
