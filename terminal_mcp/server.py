@@ -42,7 +42,7 @@ from terminal_mcp.models import (
 T = TypeVar("T")
 LineCount = Annotated[int, Field(ge=1, le=500)]
 PageCount = Annotated[int, Field(ge=1, le=20)]
-ScreenMode = Literal["focus", "recent-output", "manual"]
+ScreenMode = Literal["focus", "automatic", "manual"]
 MAX_AGGREGATE_SESSIONS = 20
 MAX_AGGREGATE_CHARACTERS = 200_000
 logger = logging.getLogger(__name__)
@@ -158,12 +158,16 @@ def create_server(manager: TerminalManager) -> FastMCP:
         return _tool_errors(operation)
 
     @server.tool(
-        description="Read terminal screen content; this has no terminal side effects."
+        description=(
+            "Read terminal screen content without side effects. Focus and automatic "
+            "use the active session or a stable fallback; manual requires an active "
+            "session."
+        )
     )
     def get_screen(lines: LineCount = 100, mode: ScreenMode = "focus") -> ScreenResult:
         def operation() -> ScreenResult:
-            if mode == "recent-output":
-                target_id, content = manager.read_recent_screen(lines)
+            if mode == "automatic":
+                target_id, content = manager.read_automatic_screen(lines)
             elif mode == "manual":
                 if manager.active_session_id is None:
                     raise ToolError("Manual mode requires an active terminal session")
@@ -210,7 +214,7 @@ def create_server(manager: TerminalManager) -> FastMCP:
     @server.tool(
         description=(
             "Type text into a terminal and optionally execute it; writes terminal "
-            "state."
+            "state. Provide session_id or first select an active session."
         )
     )
     def send_input(
@@ -225,6 +229,7 @@ def create_server(manager: TerminalManager) -> FastMCP:
     @server.tool(
         description=(
             "Send a keypress to a terminal; writes terminal state. "
+            "Provide session_id or first select an active session. "
             "Use one character or return, tab, escape, delete, up, down, left, right. "
             "Optional modifiers: command, control, option, shift."
         )
@@ -241,7 +246,10 @@ def create_server(manager: TerminalManager) -> FastMCP:
         return _tool_errors(operation)
 
     @server.tool(
-        description="Paste literal text into a terminal; writes terminal state."
+        description=(
+            "Paste literal text into a terminal; writes terminal state. "
+            "Provide session_id or first select an active session."
+        )
     )
     def paste_text(text: str, session_id: str | None = None) -> WriteResult:
         def operation() -> WriteResult:

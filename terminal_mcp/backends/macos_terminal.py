@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import time
 from collections.abc import Callable, Sequence
+from dataclasses import replace
 
 from terminal_mcp.backends.base import AppleScriptExecutor, applescript_string
 from terminal_mcp.errors import MalformedResponse, UnknownSession
@@ -56,6 +57,13 @@ def _parse_sessions(output: str, observed_at: float) -> list[SessionInfo]:
     return sessions
 
 
+def _stable_terminal_session(session: SessionInfo) -> SessionInfo | None:
+    if session.tty_device is None:
+        return None
+    tty_name = session.tty_device.removeprefix("/dev/")
+    return replace(session, session_id=f"terminal_{tty_name}")
+
+
 class MacOSTerminalBackend:
     """Operate on Terminal tabs identified by window ID and TTY.
 
@@ -104,7 +112,9 @@ end tell
 set AppleScript's text item delimiters to recordSeparator
 return outputRecords as text
 """
-        return _parse_sessions(self._runner.run(script), self._clock())
+        sessions = _parse_sessions(self._runner.run(script), self._clock())
+        stable_sessions = (_stable_terminal_session(session) for session in sessions)
+        return [session for session in stable_sessions if session is not None]
 
     @staticmethod
     def _target(session: SessionInfo) -> str:

@@ -59,7 +59,7 @@ class SetActiveResult(BaseModel):
 
 class ScreenResult(BaseModel):
     session_id: str
-    mode: Literal["focus", "recent-output", "manual"]
+    mode: Literal["focus", "automatic", "manual"]
     content: str
     lines: int
 

@@ -96,7 +96,7 @@ async def test_discovery_and_schema_contract() -> None:
     assert (lines["minimum"], lines["maximum"], lines["default"]) == (1, 500, 100)
     assert (pages["minimum"], pages["maximum"], pages["default"]) == (1, 20, 1)
     assert (mode["enum"], mode["default"]) == (
-        ["focus", "recent-output", "manual"],
+        ["focus", "automatic", "manual"],
         "focus",
     )
     outputs = {
@@ -130,8 +130,8 @@ async def test_reads_selection_and_structured_shapes() -> None:
             "get_screen", {"mode": "manual"}, raise_on_error=False
         )
         listed = await client.call_tool("list_sessions")
-        recent = await client.call_tool(
-            "get_screen", {"lines": 12, "mode": "recent-output"}
+        automatic = await client.call_tool(
+            "get_screen", {"lines": 12, "mode": "automatic"}
         )
         active = await client.call_tool("set_active_session", {"session_id": "older"})
         focus = await client.call_tool("get_screen", {"mode": "focus"})
@@ -142,9 +142,9 @@ async def test_reads_selection_and_structured_shapes() -> None:
     assert [item["session_id"] for item in sessions] == ["older", "newer"]
     assert {"session_id", "name", "tty", "busy", "active"} <= set(sessions[0])
     assert active.structured_content == {"success": True, "session_id": "older"}
-    assert recent.structured_content == {
+    assert automatic.structured_content == {
         "session_id": "newer",
-        "mode": "recent-output",
+        "mode": "automatic",
         "content": "output:newer:12",
         "lines": 12,
     }
@@ -207,14 +207,27 @@ async def test_write_policy_errors_and_successful_delegation() -> None:
 
     server, _, _ = setup(False)
     async with Client(server) as client:
+        missing_targets = [
+            await client.call_tool("send_input", {"text": "hi"}, raise_on_error=False),
+            await client.call_tool("send_keypress", {"key": "k"}, raise_on_error=False),
+            await client.call_tool(
+                "paste_text", {"text": "hello"}, raise_on_error=False
+            ),
+        ]
         results = [
-            await client.call_tool("send_input", {"text": "hi", "execute": False}),
+            await client.call_tool(
+                "send_input",
+                {"text": "hi", "execute": False, "session_id": "newer"},
+            ),
             await client.call_tool(
                 "send_keypress",
                 {"key": "k", "modifiers": ["command"], "session_id": "older"},
             ),
-            await client.call_tool("paste_text", {"text": "hello"}),
+            await client.call_tool(
+                "paste_text", {"text": "hello", "session_id": "newer"}
+            ),
         ]
+    assert all(item.is_error for item in missing_targets)
     assert [item.structured_content["session_id"] for item in results] == [
         "newer",
         "older",
@@ -229,6 +242,7 @@ async def test_write_policy_errors_and_successful_delegation() -> None:
         ("get_screen", {"lines": 0}),
         ("get_screen", {"lines": 501}),
         ("get_screen", {"mode": "guess"}),
+        ("get_screen", {"mode": "recent-output"}),
         ("get_all_terminal_info", {"lines": 0}),
         ("scroll_back", {"pages": 0}),
         ("scroll_back", {"pages": 21}),
@@ -289,7 +303,9 @@ async def test_permission_errors_include_recovery_steps_over_mcp(
     backend.send_keypress = send_keypress  # type: ignore[method-assign]
     async with Client(server) as client:
         result = await client.call_tool(
-            "send_keypress", {"key": "up"}, raise_on_error=False
+            "send_keypress",
+            {"key": "up", "session_id": "older"},
+            raise_on_error=False,
         )
     assert result.is_error
     message = " ".join(item.text for item in result.content if item.type == "text")
@@ -358,7 +374,7 @@ async def test_runtime_exposes_tools_and_recovers_after_detection_failure(
         assert recovered.structured_content["total"] == 2
         screen = await client.call_tool("get_screen")
         assert screen.structured_content["content"].startswith("output:")
-        await client.call_tool("send_keypress", {"key": "up"})
+        await client.call_tool("send_keypress", {"key": "up", "session_id": "older"})
         assert attempts == 2
     assert len([call for call in backend.calls if call[0] == "key"]) == 1
 
@@ -384,7 +400,9 @@ async def test_lazy_runtime_does_not_retry_a_timed_out_write(
     )
     async with Client(server) as client:
         result = await client.call_tool(
-            "send_input", {"text": "echo test"}, raise_on_error=False
+            "send_input",
+            {"text": "echo test", "session_id": "older"},
+            raise_on_error=False,
         )
         assert result.is_error
         assert writes == 1

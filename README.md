@@ -32,6 +32,11 @@ The server exposes eight tools:
 `shift` modifiers. For example, `{"key": "up"}` recalls shell history without
 pressing Return.
 
+`get_screen` supports `focus`, `automatic`, and `manual` modes. `focus` and
+`automatic` use the selected session when available, then fall back to the first
+eligible session in stable ID order. `manual` requires a session selected with
+`set_active_session`.
+
 It also provides a per-session resource and workflow, summary, command-suggestion, and troubleshooting prompts.
 
 The MCP handshake and tool discovery do not query macOS. Terminal and self-session
@@ -43,6 +48,10 @@ writes are never automatically retried after an error or timeout.
 ## Safety and permissions
 
 The public default is read-only (`MCP_TERMINAL_READONLY=1`). To opt into terminal writes, set `MCP_TERMINAL_READONLY=0` in `.env`; only do this for clients and projects you trust.
+
+Every write also needs a deliberate target: provide `session_id` in the tool
+call or first use `set_active_session`. Write tools do not choose a terminal
+automatically.
 
 On current macOS, grant the MCP client access under **System Settings → Privacy & Security → Automation** when prompted. Depending on how the client launches the server, macOS may also request **Accessibility** access. `make health` cannot prove these permissions without triggering automation, so permission failures appear on the first real tool call.
 

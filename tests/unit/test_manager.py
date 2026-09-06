@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import threading
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 
 import pytest
 
@@ -131,16 +131,48 @@ def test_exclusions_and_explicit_override_only(monkeypatch: pytest.MonkeyPatch) 
         ),
     )
     assert [s.session_id for s in manager.list_sessions()] == ["ok"]
-    assert manager.most_recent_session().session_id == "ok"
+    assert manager.automatic_session().session_id == "ok"
     with pytest.raises(ExcludedSession):
         manager.set_active_session("self")
     assert manager.get_session_content("self", 2) == "self:2:1"
 
 
-def test_active_validation_fallback_and_recent_ties() -> None:
+def test_self_override_never_bypasses_configured_exclusions(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "terminal_mcp.manager.detect_controlling_tty", lambda: "/dev/ttys9"
+    )
+    backend = Backend(
+        [
+            [
+                session("blocked-id", tty="/dev/ttys1"),
+                session("blocked-tty", tty="/dev/ttys9"),
+            ]
+        ]
+    )
+    manager = TerminalManager(
+        backend,
+        settings(
+            readonly=False,
+            excluded_sessions=frozenset({"blocked-id"}),
+            excluded_ttys=frozenset({"/dev/ttys9"}),
+            detect_self_session=True,
+            allow_self_target=True,
+        ),
+    )
+
+    with pytest.raises(ExcludedSession):
+        manager.send_input("blocked-id", "text")
+    with pytest.raises(ExcludedSession):
+        manager.send_input("blocked-tty", "text")
+    assert backend.calls == []
+
+
+def test_active_validation_and_stable_automatic_fallback() -> None:
     backend = Backend([[session("z", observed=5), session("a", observed=5)]])
     manager = TerminalManager(backend, settings())
-    assert manager.most_recent_session().session_id == "a"
+    assert manager.automatic_session().session_id == "a"
     assert manager.get_active_session_content(7) == "a:7:1"
     manager.set_active_session("z")
     assert manager.get_active_session_content(4) == "z:4:2"
@@ -181,7 +213,34 @@ def test_every_write_is_gated_and_writable_delegates_exact_arguments() -> None:
     ]
 
 
-def test_only_caller_supplied_id_can_override_refreshed_exclusion() -> None:
+@pytest.mark.parametrize(
+    "operation",
+    [
+        lambda manager: manager.send_input(None, "text"),
+        lambda manager: manager.send_keypress(None, "k"),
+        lambda manager: manager.paste_text(None, "text"),
+    ],
+)
+def test_writes_require_explicit_or_active_target(
+    operation: Callable[[TerminalManager], str],
+) -> None:
+    backend = Backend([[session("a")]])
+    manager = TerminalManager(backend, settings(readonly=False))
+
+    with pytest.raises(UnknownSession, match="session_id"):
+        operation(manager)
+    assert backend.calls == []
+
+    manager.set_active_session("a")
+    assert operation(manager) == "a"
+
+
+def test_only_caller_supplied_id_can_override_detected_self_session(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "terminal_mcp.manager.detect_controlling_tty", lambda: "/dev/ttys9"
+    )
     now = [0.0]
     eligible = session("self", tty="/dev/ttys1")
     excluded = session("self", tty="/dev/ttys9")
@@ -190,7 +249,7 @@ def test_only_caller_supplied_id_can_override_refreshed_exclusion() -> None:
         backend,
         settings(
             readonly=False,
-            excluded_ttys=frozenset({"/dev/ttys9"}),
+            detect_self_session=True,
             allow_self_target=True,
         ),
         clock=lambda: now[0],

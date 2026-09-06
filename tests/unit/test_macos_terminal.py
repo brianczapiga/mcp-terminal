@@ -28,9 +28,33 @@ def test_lists_terminal_sessions_from_tab_separated_records() -> None:
 
     assert backend.list_sessions() == [
         SessionInfo(
-            "75081_1", "75081", "1", "Build, deploy", "/dev/ttys001", False, 42.5
+            "terminal_ttys001",
+            "75081",
+            "1",
+            "Build, deploy",
+            "/dev/ttys001",
+            False,
+            42.5,
         )
     ]
+
+
+def test_terminal_ids_follow_tty_when_tab_indexes_change() -> None:
+    first = RecordingRunner("10\t1\tA\t/dev/ttys001\tfalse")
+    second = RecordingRunner("10\t2\tA\t/dev/ttys001\tfalse")
+
+    assert (
+        MacOSTerminalBackend(first).list_sessions()[0].session_id == "terminal_ttys001"
+    )
+    assert (
+        MacOSTerminalBackend(second).list_sessions()[0].session_id == "terminal_ttys001"
+    )
+
+
+def test_terminal_omits_sessions_without_stable_tty() -> None:
+    runner = RecordingRunner("10\t1\tStarting\t\tfalse")
+
+    assert MacOSTerminalBackend(runner).list_sessions() == []
 
 
 @pytest.mark.parametrize(

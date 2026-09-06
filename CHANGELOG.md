@@ -41,6 +41,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- Kept Terminal.app session IDs bound to TTYs when tabs are reordered.
+- Kept configured session and TTY exclusions absolute when self-target override is enabled.
+- Required write tools to receive an explicit or previously selected session instead of choosing one automatically.
+- Aligned `make setup` with the documented Python 3.10+ support range.
+
+### Changed
+- Replaced the misleading `recent-output` screen mode with deterministic `automatic` selection.
+
 ### Added
 - Initial public release
 - MCP server for macOS Terminal integration

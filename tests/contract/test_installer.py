@@ -4,6 +4,50 @@ import subprocess
 import sys
 from pathlib import Path
 
+ROOT = Path(__file__).parents[2]
+
+
+def test_makefile_accepts_supported_configurable_python() -> None:
+    result = subprocess.run(
+        ["make", "check-python", f"PYTHON_BIN={sys.executable}"],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+
+
+def test_makefile_rejects_unsupported_python(tmp_path: Path) -> None:
+    unsupported = tmp_path / "python-old"
+    unsupported.write_text("#!/bin/sh\nexit 1\n")
+    unsupported.chmod(0o755)
+
+    result = subprocess.run(
+        ["make", "check-python", f"PYTHON_BIN={unsupported}"],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode != 0
+    assert "Python 3.10 or newer is required" in result.stdout
+
+
+def test_makefile_setup_uses_configurable_python() -> None:
+    result = subprocess.run(
+        ["make", "-n", "setup", f"PYTHON_BIN={sys.executable}"],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+
+    assert sys.executable in result.stdout
+    assert "python3.12" not in result.stdout
+
 
 def test_installer_anchors_files_to_checkout_and_preserves_env(tmp_path: Path) -> None:
     project = tmp_path / "project"

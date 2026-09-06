@@ -9,6 +9,10 @@ make setup
 cp env.example .env
 ```
 
+`make setup` uses `python3` by default and accepts any supported Python 3.10+
+interpreter. If your preferred interpreter has a versioned name, run, for
+example, `make setup PYTHON_BIN=python3.11`.
+
 Before submitting a pull request, run the same mandatory checks as CI:
 
 ```bash

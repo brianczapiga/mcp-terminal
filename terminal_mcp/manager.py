@@ -90,21 +90,30 @@ class TerminalManager:
         self._last_scan_at: float | None = None
         self._buffer_size = max(1, buffer_size)
         self._lock = threading.RLock()
-        self._excluded_ttys = set(settings.excluded_ttys)
+        self._detected_self_tty: str | None = None
         self._self_session_checked = not settings.detect_self_session
 
     def _check_self_session(self) -> None:
         if not self._self_session_checked:
             detected_tty = detect_controlling_tty()
             if detected_tty is not None:
-                self._excluded_ttys.add(detected_tty)
+                self._detected_self_tty = _normalize_tty(detected_tty)
             self._self_session_checked = True
 
-    def _is_excluded(self, session: SessionInfo) -> bool:
+    def _is_configured_excluded(self, session: SessionInfo) -> bool:
         return session.session_id in self.settings.excluded_sessions or (
             session.tty_device is not None
-            and _normalize_tty(session.tty_device) in self._excluded_ttys
+            and _normalize_tty(session.tty_device) in self.settings.excluded_ttys
         )
+
+    def _is_detected_self(self, session: SessionInfo) -> bool:
+        return (
+            session.tty_device is not None
+            and _normalize_tty(session.tty_device) == self._detected_self_tty
+        )
+
+    def _is_excluded(self, session: SessionInfo) -> bool:
+        return self._is_configured_excluded(session) or self._is_detected_self(session)
 
     def list_sessions(self, force: bool = False) -> list[SessionInfo]:
         with self._lock:
@@ -129,12 +138,12 @@ class TerminalManager:
                 item for item in self.sessions.values() if not self._is_excluded(item)
             ]
 
-    def most_recent_session(self) -> SessionInfo:
+    def automatic_session(self) -> SessionInfo:
         with self._lock:
             sessions = self.list_sessions()
             if not sessions:
                 raise UnknownSession("No eligible terminal sessions are available")
-            return min(sessions, key=lambda item: (-item.observed_at, item.session_id))
+            return min(sessions, key=lambda item: item.session_id)
 
     def set_active_session(self, session_id: str) -> None:
         with self._lock:
@@ -146,18 +155,26 @@ class TerminalManager:
                 raise ExcludedSession(f"Terminal session is excluded: {session_id}")
             self.active_session_id = session_id
 
-    def _resolve_target(self, session_id: str | None) -> SessionInfo:
+    def _resolve_target(
+        self, session_id: str | None, *, allow_automatic: bool = True
+    ) -> SessionInfo:
         with self._lock:
             explicitly_supplied = session_id is not None
             self.list_sessions()
             if session_id is None:
                 session_id = self.active_session_id
                 if session_id is None:
-                    return self.most_recent_session()
+                    if not allow_automatic:
+                        raise UnknownSession(
+                            "Provide session_id or select an active session"
+                        )
+                    return self.automatic_session()
             target = self.sessions.get(session_id)
             if target is None:
                 raise UnknownSession(f"Unknown terminal session: {session_id}")
-            if self._is_excluded(target) and not (
+            if self._is_configured_excluded(target):
+                raise ExcludedSession(f"Terminal session is excluded: {session_id}")
+            if self._is_detected_self(target) and not (
                 explicitly_supplied and self.settings.allow_self_target
             ):
                 raise ExcludedSession(f"Terminal session is excluded: {session_id}")
@@ -174,9 +191,9 @@ class TerminalManager:
                 return target.session_id, ""
             return target.session_id, self._read_and_buffer(target, lines)
 
-    def read_recent_screen(self, lines: int = 100) -> tuple[str, str]:
+    def read_automatic_screen(self, lines: int = 100) -> tuple[str, str]:
         with self._lock:
-            target = self.most_recent_session()
+            target = self._resolve_target(None)
             return target.session_id, self._read_and_buffer(target, lines)
 
     def read_snapshot_session(self, session: SessionInfo, lines: int = 100) -> str:
@@ -226,9 +243,7 @@ class TerminalManager:
                 (
                     active_id
                     if active_id in selected_ids
-                    else min(
-                        selected, key=lambda item: (-item.observed_at, item.session_id)
-                    ).session_id
+                    else min(selected, key=lambda item: item.session_id).session_id
                     if selected
                     else None
                 ),
@@ -271,7 +286,7 @@ class TerminalManager:
     ) -> str:
         with self._lock:
             self._require_write()
-            target = self._resolve_target(session_id)
+            target = self._resolve_target(session_id, allow_automatic=False)
             self.backend.send_text(target, text, execute)
             return target.session_id
 
@@ -283,13 +298,13 @@ class TerminalManager:
     ) -> str:
         with self._lock:
             self._require_write()
-            target = self._resolve_target(session_id)
+            target = self._resolve_target(session_id, allow_automatic=False)
             self.backend.send_keypress(target, key, modifiers)
             return target.session_id
 
     def paste_text(self, session_id: str | None, text: str) -> str:
         with self._lock:
             self._require_write()
-            target = self._resolve_target(session_id)
+            target = self._resolve_target(session_id, allow_automatic=False)
             self.backend.paste_text(target, text)
             return target.session_id

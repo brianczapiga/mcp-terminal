@@ -52,4 +52,10 @@ When Claude Code itself runs inside Terminal.app or iTerm2, add its TTY (for exa
 
 The checked-in `env.example` enables read-only mode. Set `MCP_TERMINAL_READONLY=0` only when you deliberately want the three write tools. Keep `MCP_TERMINAL_ALLOW_SELF_TARGET=0`: overriding it can make the server type into, interrupt, or otherwise destabilize the client session hosting it.
 
+Write calls must include `session_id` or follow a successful
+`set_active_session` call. The server will reject a write rather than choose a
+terminal automatically. The `MCP_TERMINAL_ALLOW_SELF_TARGET` override applies
+only to an automatically detected self-session; configured session and TTY
+exclusions always remain blocked.
+
 On first use, macOS may request Automation or Accessibility permission. Configure these under **System Settings → Privacy & Security**. The local health check deliberately does not trigger an Apple event and therefore cannot certify permissions.

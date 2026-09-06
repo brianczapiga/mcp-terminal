@@ -53,6 +53,9 @@ async def test_stdio_handshake_and_tool_recovery_with_failing_applescript() -> N
         message = " ".join(item.text for item in failed.content if item.type == "text")
         assert "timed out" in message
         recovered = await client.call_tool("list_sessions")
-        assert recovered.structured_content["sessions"][0]["session_id"] == "42_1"
+        assert (
+            recovered.structured_content["sessions"][0]["session_id"]
+            == "terminal_ttys123"
+        )
         screen = await client.call_tool("get_screen")
         assert screen.structured_content["content"] == "terminal output"

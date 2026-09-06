@@ -1,7 +1,8 @@
-.PHONY: help setup install test run run-safe health clean lint format check dev-setup
+.PHONY: help check-python setup install test run run-safe health clean lint format check dev-setup
 
 VENV := .venv
 PYTHON := $(VENV)/bin/python
+PYTHON_BIN ?= python3
 
 help:
 	@echo "Available commands:"
@@ -16,13 +17,16 @@ help:
 	@echo "  format     Format code with Ruff"
 	@echo "  check      Run lint, format check, types, tests, and package build"
 
-setup:
+check-python:
+	@command -v "$(PYTHON_BIN)" >/dev/null 2>&1 || { echo "$(PYTHON_BIN) is unavailable"; exit 1; }
+	@"$(PYTHON_BIN)" -c 'import sys; raise SystemExit(sys.version_info < (3, 10))' || { echo "Python 3.10 or newer is required"; exit 1; }
+
+setup: check-python
 	@if command -v uv >/dev/null 2>&1; then \
-		uv venv --python 3.12 $(VENV); \
+		uv venv --python "$(PYTHON_BIN)" $(VENV); \
 		uv pip install --python $(PYTHON) -e '.[dev]'; \
 	else \
-		command -v python3.12 >/dev/null 2>&1 || { echo "Python 3.12 or uv is required"; exit 1; }; \
-		python3.12 -m venv $(VENV); \
+		"$(PYTHON_BIN)" -m venv $(VENV); \
 		$(PYTHON) -m pip install -e '.[dev]'; \
 	fi
 	@echo "Setup complete. Use $(PYTHON) or tools in $(VENV)/bin directly."
