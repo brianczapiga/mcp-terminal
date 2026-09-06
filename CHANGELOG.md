@@ -58,7 +58,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Content retrieval with configurable line limits
 - Input control and command execution
 - Scroll-back functionality
-- Multiple operation modes (focus, recent-output, manual)
+- Multiple operation modes (focus, automatic, manual)
 - Comprehensive error handling and logging
 - Production-ready architecture with graceful degradation
 
@@ -66,7 +66,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Session Management**: List all Terminal windows and tabs with detailed information
 - **Content Retrieval**: Get current screen contents with configurable line limits
 - **Input Control**: Send commands or keystrokes to active sessions
-- **Multiple Modes**: Support for focus, recent-output, and manual modes
+- **Multiple Modes**: Support for focus, automatic, and manual modes
 - **Buffer Management**: Rolling buffer for scroll-back functionality
 - **Dual Terminal Support**: Primary support for Apple Terminal with iTerm2 fallback
 - **Production Ready**: Error handling, logging, and graceful degradation

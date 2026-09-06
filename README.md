@@ -65,7 +65,7 @@ MCP client or its terminal host. See Apple's guidance for
 Read-only policy errors explain which environment setting to change and when to
 restart the server. Generic errors and timeouts are not labeled permission denials.
 
-Self-session detection reduces the chance of targeting the terminal session that hosts the MCP client, but detection is best effort. Claude Code hosted from a terminal may need its TTY added to `MCP_TERMINAL_EXCLUDED_TTYS`. `MCP_TERMINAL_ALLOW_SELF_TARGET=1` overrides the guard and can create feedback loops or disrupt the client itself.
+Self-session detection reduces the chance of targeting the terminal session that hosts the MCP client, but detection is best effort. Claude Code hosted from a terminal may need its TTY added to `MCP_TERMINAL_EXCLUDED_TTYS`. `MCP_TERMINAL_ALLOW_SELF_TARGET=1` overrides only the automatically detected self-session guard; configured session and TTY exclusions remain blocked. Targeting the hosting session can create feedback loops or disrupt the client itself.
 
 ## Development
 
