@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+## [2.1.0] - 2026-09-05
+
+### Fixed
+- Kept Terminal.app session IDs bound to TTYs when tabs are reordered.
+- Kept configured session and TTY exclusions absolute when self-target override is enabled.
+- Required write tools to receive an explicit or previously selected session instead of choosing one automatically.
+- Aligned `make setup` with the documented Python 3.10+ support range.
+
+### Changed
+- Replaced the misleading `recent-output` screen mode with deterministic `automatic` selection.
+
 ## [2.0.0] - 2026-09-04
 
 ### Changed
@@ -38,46 +51,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - ✅ **Void**: Full compatibility with Void's MCP client
 - ✅ **Goose**: Maintained backward compatibility with standard MCP clients
 - ✅ **Other MCP Clients**: Should work with any MCP client following the protocol
-
-## [Unreleased]
-
-### Fixed
-- Kept Terminal.app session IDs bound to TTYs when tabs are reordered.
-- Kept configured session and TTY exclusions absolute when self-target override is enabled.
-- Required write tools to receive an explicit or previously selected session instead of choosing one automatically.
-- Aligned `make setup` with the documented Python 3.10+ support range.
-
-### Changed
-- Replaced the misleading `recent-output` screen mode with deterministic `automatic` selection.
-
-### Added
-- Initial public release
-- MCP server for macOS Terminal integration
-- Support for Apple Terminal and iTerm2
-- Session management and monitoring
-- Content retrieval with configurable line limits
-- Input control and command execution
-- Scroll-back functionality
-- Multiple operation modes (focus, automatic, manual)
-- Comprehensive error handling and logging
-- Production-ready architecture with graceful degradation
-
-### Features
-- **Session Management**: List all Terminal windows and tabs with detailed information
-- **Content Retrieval**: Get current screen contents with configurable line limits
-- **Input Control**: Send commands or keystrokes to active sessions
-- **Multiple Modes**: Support for focus, automatic, and manual modes
-- **Buffer Management**: Rolling buffer for scroll-back functionality
-- **Dual Terminal Support**: Primary support for Apple Terminal with iTerm2 fallback
-- **Production Ready**: Error handling, logging, and graceful degradation
-
-### Technical Details
-- Built with FastMCP for easy integration
-- Uses AppleScript for terminal control
-- Async operations for better performance
-- Type safety with Pydantic models
-- Comprehensive error reporting and logging
-- stdio transport for secure communication
 
 ## [1.0.0] - 2024-07-26
 
